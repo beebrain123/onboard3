@@ -1,5 +1,6 @@
 const bip32   = require('@scure/bip32');
 const bip39   = require('@scure/bip39');
+const crypto  = require('crypto');
 const { wordlist } = require('@scure/bip39/wordlists/english');
 const { makeSTXTokenTransfer, makeContractCall, broadcastTransaction, sponsorTransaction, AnchorMode, getAddressFromPrivateKey, stringAsciiCV, signWithKey } = require('@stacks/transactions');
 const { signatureVrsToRsv } = require('@stacks/common');
@@ -243,6 +244,64 @@ async function getFeeWalletInfo() {
 }
 
 const ZAD_BASE = 'https://zeroauthoritydao.com';
+function cloudinaryCredentials() {
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if ((!cloudName || !apiKey || !apiSecret) && process.env.CLOUDINARY_URL) {
+    try {
+      const parsed = new URL(process.env.CLOUDINARY_URL);
+      cloudName = cloudName || parsed.hostname;
+      apiKey = apiKey || decodeURIComponent(parsed.username);
+      apiSecret = apiSecret || decodeURIComponent(parsed.password);
+    } catch {}
+  }
+  return cloudName && apiKey && apiSecret ? { cloudName, apiKey, apiSecret } : null;
+}
+
+async function getZADAvatarUrl(avatarData, walletAddress) {
+  if (typeof avatarData === 'string' && /^https?:\/\//i.test(avatarData)) return avatarData;
+  if (typeof avatarData !== 'string' || !walletAddress) return null;
+  if (!/^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(avatarData)) return null;
+
+  const credentials = cloudinaryCredentials();
+  if (!credentials) {
+    console.warn('[Cloudinary] Avatar sync skipped; configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.');
+    return null;
+  }
+
+  const sourceHash = crypto.createHash('sha256').update(avatarData).digest('hex');
+  const User = require('../models/User');
+  const user = await User.findOne({ stacksAddress: walletAddress })
+    .select('_id zeroAuthAvatarHash zeroAuthAvatarUrl').lean();
+  if (!user) return null;
+  if (user.zeroAuthAvatarHash === sourceHash && user.zeroAuthAvatarUrl) return user.zeroAuthAvatarUrl;
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const publicId = `onboard3/stacks-avatars/${walletAddress}`;
+  const signedParams = { overwrite: 'true', public_id: publicId, timestamp };
+  const signaturePayload = Object.keys(signedParams).sort()
+    .map(key => `${key}=${signedParams[key]}`).join('&') + credentials.apiSecret;
+  const signature = crypto.createHash('sha1').update(signaturePayload).digest('hex');
+  const form = new URLSearchParams({ file: avatarData, api_key: credentials.apiKey, signature, ...signedParams });
+
+  try {
+    const response = await axios.post(
+      `https://api.cloudinary.com/v1_1/${encodeURIComponent(credentials.cloudName)}/image/upload`,
+      form.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20000, maxBodyLength: 2000000 }
+    );
+    const secureUrl = response.data?.secure_url;
+    if (!secureUrl) throw new Error('Cloudinary response did not include secure_url');
+    await User.updateOne({ _id: user._id }, {
+      $set: { zeroAuthAvatarHash: sourceHash, zeroAuthAvatarUrl: secureUrl }
+    });
+    return secureUrl;
+  } catch (error) {
+    console.warn('[Cloudinary] Avatar upload failed:', error.response?.status || error.message);
+    return null;
+  }
+}
 // Build a SIWE/SIWS message exactly as ZeroAuthDAO's frontend does
 // They use: new SiweMessage({ statement:"Cerulean Marketplace", domain: origin, address, uri: origin, ... })
 function buildSiwsMessage(address, nonce) {
@@ -284,6 +343,7 @@ async function authenticateWithZAD(privKey, profile = {}) {
 
   const message   = buildSiwsMessage(address, nonce);
   const signature = await stacksPersonalSign(privKeyHex, message);
+  const zadAvatarUrl = await getZADAvatarUrl(profile.avatarUrl, address);
 
   let res;
   try {
@@ -297,7 +357,7 @@ async function authenticateWithZAD(privKey, profile = {}) {
       // Pass username on signin — ZAD sets display name on first account creation
       ...(typeof profile.username === 'string' && profile.username.trim() ? { username: profile.username.trim() } : {}),
       // Only pass avatarUrl if it's a real hosted URL (not a base64 data URI which ZAD can't use)
-      ...(profile.avatarUrl && profile.avatarUrl.startsWith('http') ? { image: profile.avatarUrl, avatarUrl: profile.avatarUrl } : {}),
+      ...(zadAvatarUrl ? { image: zadAvatarUrl, avatarUrl: zadAvatarUrl } : {}),
     }, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 12000,
@@ -324,18 +384,17 @@ async function authenticateWithZAD(privKey, profile = {}) {
 // REST endpoints, and admin-API-key approaches (in order of reliability)
 // Update a ZAD user's profile through the documented session-authenticated API.
 async function tryUpdateZADProfile(cookieStr, username, avatarUrl, walletAddress, signinUser) {
+  if (!walletAddress) return;
   const displayName = typeof username === 'string' ? username.trim() : '';
-  if (!displayName || !walletAddress) return;
-
-  // wallet-signin already preserves a nonblank ZAD name; avoid replacing it here too.
   const existingName = signinUser?.username || signinUser?.name || signinUser?.displayName;
-  if (typeof existingName === 'string' && existingName.trim()) {
-    console.log('[ZAD] Existing profile name retained:', existingName.trim());
-    return;
-  }
-
-  const safeAvatar = typeof avatarUrl === 'string' && avatarUrl.startsWith('http') ? avatarUrl : null;
-  const body = { username: displayName, ...(safeAvatar ? { avatarUrl: safeAvatar } : {}) };
+  const shouldSetName = !!displayName && !(typeof existingName === 'string' && existingName.trim());
+  const safeAvatar = await getZADAvatarUrl(avatarUrl, walletAddress);
+  const body = {
+    ...(shouldSetName ? { username: displayName } : {}),
+    ...(safeAvatar ? { avatarUrl: safeAvatar } : {}),
+  };
+  if (!Object.keys(body).length) return;
+  if (!shouldSetName && existingName) console.log('[ZAD] Existing profile name retained:', existingName);
   try {
     const response = await axios.put(
       `${ZAD_BASE}/api/users/${encodeURIComponent(walletAddress)}`,

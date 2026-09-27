@@ -352,6 +352,8 @@ const userSchema = new mongoose.Schema({
   // Custodial Stacks wallet (for ZeroAuthDAO bounty payouts)
   stacksWalletIndex: { type: Number, default: null },
   stacksAddress:     { type: String, default: null },
+  zeroAuthAvatarHash: { type: String, default: null },
+  zeroAuthAvatarUrl:  { type: String, default: null },
   stacksBalance:     { type: Number, default: 0 },    // cached microSTX
   stacksBalanceUSD:  { type: Number, default: 0 },    // cached USD value
   stacksCheckedAt:   { type: Date,   default: null },
