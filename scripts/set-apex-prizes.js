@@ -3,27 +3,24 @@ const mongoose = require('mongoose');
 const Quest = require('../models/Quest');
 
 async function run() {
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI);
 
-  const quest = await Quest.findOne({ title: /apex/i });
-  if (!quest) {
-    console.error('❌ No quest with "Apex" in the title found.');
-    process.exit(1);
+  try {
+    const quest = await Quest.findOne({ slug: 'apex-raiders' });
+    if (!quest) throw new Error('Apex Raiders campaign not found');
+
+    quest.prizeDistribution = [{ from: 1, to: 20, amount: 5 }];
+    const rewardNote = 'Reward update: Because this campaign ran for only one week, the $100 pool is shared equally among ranks 1 through 20 ($5 each). Rewards have not yet been disbursed.';
+    if (!(quest.description || '').includes('Reward update:')) {
+      quest.description = [quest.description?.trim(), rewardNote].filter(Boolean).join('\n\n');
+    }
+    quest.shortDescription = 'One-week campaign: $100 shared equally among ranks 1 through 20 ($5 each). Rewards have not yet been disbursed.';
+
+    await quest.save();
+    console.log('Updated Apex reward information only. No rewards were disbursed.');
+  } finally {
+    await mongoose.disconnect();
   }
-
-  console.log('Found quest:', quest.title, '(' + quest._id + ')');
-
-  quest.prizeDistribution = [
-    { from: 1,  to: 3,  amount: 50 },
-    { from: 4,  to: 5,  amount: 30 },
-    { from: 6,  to: 15, amount: 15 },
-    { from: 16, to: 25, amount: 10 },
-    { from: 26, to: 30, amount: 8  }
-  ];
-
-  await quest.save();
-  console.log('✅ Prize distribution set on:', quest.title);
-  process.exit(0);
 }
 
-run().catch(err => { console.error(err); process.exit(1); });
+run().catch(err => { console.error(err); process.exitCode = 1; });

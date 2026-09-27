@@ -15,8 +15,8 @@ async function seed() {
 
   const quest = new Quest({
     title: 'Apex Raiders Campaign',
-    shortDescription: 'Daily raiding tasks for Eyecoin, Ginox & StxBuzz. Complete tasks, rank higher, earn rewards.',
-    description: `Welcome to the Apex Raiders Campaign — the ultimate social raiding mission for crypto communities.\n\nThis quest is for dedicated raiders who are ready to complete daily social tasks for Eyecoin, Ginox, and StxBuzz. Our admin team adds new tasks every single day, so there is always something fresh to conquer.\n\nComplete tasks consistently to climb the leaderboard. Quality submissions are reviewed by admin and earn you extra XP — the more effort you put in, the higher you rank. Top raiders will be rewarded at the end of the campaign.\n\nThis quest is hosted in partnership with Eyecoin, Ginox, and StxBuzz. Get your code, apply, get approved, and start raiding today.`,
+    shortDescription: 'One-week campaign: $100 shared equally among ranks 1 through 20 ($5 each). Rewards have not yet been disbursed.',
+    description: `Welcome to the Apex Raiders Campaign \u2014 the ultimate social raiding mission for crypto communities.\n\nThis quest is for dedicated raiders who are ready to complete daily social tasks for Eyecoin, Ginox, and StxBuzz. Our admin team adds new tasks every single day, so there is always something fresh to conquer.\n\nComplete tasks consistently to climb the leaderboard. Quality submissions are reviewed by admin and earn you extra XP \u2014 the more effort you put in, the higher you rank. Top 20 raiders share a $100 prize pool equally ($5 each). The campaign ran for only one week, and rewards have not yet been disbursed.\n\nThis quest is hosted in partnership with Eyecoin, Ginox, and StxBuzz. Get your code, apply, get approved, and start raiding today.`,
     questType: 'competition',
     category: 'special',
     difficulty: 'intermediate',
@@ -36,6 +36,7 @@ async function seed() {
       { name: 'StxBuzz', logo: '/img/partners/stxbuzz.jpg' }
     ],
     competitionConfig: { enabled: true, topWinnersCount: 10, winnerBonusXP: 500 },
+    prizeDistribution: [{ from: 1, to: 20, amount: 5 }],
     tasks: [],
     createdBy: null,
     approvalStatus: 'approved'

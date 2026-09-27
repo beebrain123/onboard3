@@ -962,7 +962,7 @@ SPECIAL CAMPAIGNS (e.g. Apex Raiders):
 - These are exclusive gated campaigns with big prize pools
 - To join: get an access code → enter it on the quest page → provide your X handle and Telegram → wait for admin approval
 - Once approved, you can participate and compete for prizes
-- The Apex Raiders campaign has a $500 prize pool: Top 3 share $100, 4th–10th share $100, 11th–30th share $300
+- Apex Raiders ran for one week, so its $100 pool is shared equally among ranks 1 through 20 ($5 each). Rewards have not yet been disbursed.
 
 REFERRALS:
 - Every member has a unique referral link/code
