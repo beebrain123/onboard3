@@ -106,6 +106,11 @@
  .bd-submit-btn { width:100%; padding:.85rem; border-radius:11px; background:var(--green); color:#000; font-family:'Outfit',sans-serif; font-size:.9rem; font-weight:900; border:none; cursor:pointer; transition:all .22s; letter-spacing:-.01em; }
  .bd-submit-btn:hover:not(:disabled) { opacity:.88; transform:translateY(-1px); box-shadow:0 6px 18px rgba(94,194,19,.35); }
  .bd-submit-btn:disabled { opacity:.42; cursor:not-allowed; }
+ .bd-quick-submit { display:inline-flex; align-items:center; gap:.5rem; padding:.65rem 1rem; border-radius:10px; background:var(--green); color:#071006; font:800 .82rem 'Outfit',sans-serif; text-decoration:none; border:0; cursor:pointer; }
+ .bd-submit-dialog { width:min(460px,calc(100vw - 2rem)); max-height:calc(100dvh - 2rem); overflow:auto; padding:1.25rem; color:#fff; background:#111a11; border:1px solid rgba(255,255,255,.12); border-radius:16px; box-shadow:0 24px 80px rgba(0,0,0,.6); }
+ .bd-submit-dialog::backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(4px); }
+ .bd-dialog-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+ .bd-dialog-close { border:0; background:transparent; color:rgba(255,255,255,.6); font-size:1.1rem; cursor:pointer; padding:.3rem; }
 
  /* ── Status states ── */
  .bd-status { text-align:center; padding:1.25rem .5rem; }
@@ -166,6 +171,9 @@
  </div>
  <h1 class="bd-title"><%= bounty.title %></h1>
  <p class="bd-short"><%= bounty.shortDescription %></p>
+ <% if (bounty.status !== 'winners_announced' && !(bounty.endDate && new Date() > new Date(bounty.endDate)) && !mySubmission) { %>
+ <button type="button" class="bd-quick-submit" onclick="document.getElementById('submitDialog').showModal()"><i class="fas fa-paper-plane"></i> Submit Bounty</button>
+ <% } %>
  <div class="bd-pills">
  <span class="bd-pill bd-pill-pool"><i class="fas fa-coins"></i> <%= (bounty.rewardPool||0).toLocaleString() %> <%= bounty.rewardToken || 'USDC' %> Pool</span>
  <span class="bd-pill bd-pill-subs"><i class="fas fa-file-alt"></i> <%= submissions.length %> Submission<%= submissions.length !== 1 ? 's' : '' %></span>
@@ -314,7 +322,14 @@
  <p>This bounty has ended.</p>
  </div>
  <% } else { %>
- <div class="bd-submit-title"><i class="fas fa-paper-plane"></i> Submit Your Work</div>
+ <div class="bd-submit-title"><i class="fas fa-paper-plane"></i> Ready to enter?</div>
+ <p style="font-size:.8rem;color:rgba(255,255,255,.42);line-height:1.5;margin-bottom:.9rem">Open the submission form to share your work.</p>
+ <button type="button" class="bd-submit-btn" onclick="document.getElementById('submitDialog').showModal()"><i class="fas fa-paper-plane"></i> Submit Bounty</button>
+ <% } %>
+ </div>
+ <% if (!winnersOut && !mySubmission && !isEnded) { %>
+ <dialog class="bd-submit-dialog" id="submitDialog" aria-labelledby="submitDialogTitle">
+ <div class="bd-dialog-head"><h2 id="submitDialogTitle" style="font-size:1rem;margin:0">Submit Your Work</h2><button type="button" class="bd-dialog-close" aria-label="Close" onclick="document.getElementById('submitDialog').close()"><i class="fas fa-times"></i></button></div>
  <form id="submitForm">
  <div class="bd-fg">
  <label>Title *</label>
@@ -330,8 +345,8 @@
  </div>
  <button type="submit" class="bd-submit-btn" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit</button>
  </form>
+ </dialog>
  <% } %>
- </div>
 
  </div><!-- /sidebar -->
  </div><!-- /bd-layout -->
