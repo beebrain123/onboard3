@@ -13,7 +13,7 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   try {
     const matches = [];
-    for (const name of ['beebrain', 'frt']) {
+    for (const name of ['admin', 'frt']) {
       const user = await User.findOne({ username: { $regex: '^' + name + '$', $options: 'i' } }).select('_id username').lean();
       if (!user) continue;
       const row = await ThirdPartySubmission.findOne({ platform: 'zeroauthoritydao', userId: user._id, createdAt: { $gte: cutoff } })
@@ -29,8 +29,8 @@ async function main() {
       console.log(`Dry run: ${matches.length} row(s) matched; nothing deleted.`);
       return;
     }
-    if (!process.env.CONFIRM_ZAD_CLEANUP || process.env.CONFIRM_ZAD_CLEANUP !== 'delete-beebrain-frt-2026-10-02') {
-      throw new Error('Set CONFIRM_ZAD_CLEANUP=delete-beebrain-frt-2026-10-02 to confirm deletion.');
+    if (!process.env.CONFIRM_ZAD_CLEANUP || process.env.CONFIRM_ZAD_CLEANUP !== 'delete-admin-frt-2026-10-02') {
+      throw new Error('Set CONFIRM_ZAD_CLEANUP=delete-admin-frt-2026-10-02 to confirm deletion.');
     }
     if (!matches.length) {
       console.log('No matching submissions found.');
