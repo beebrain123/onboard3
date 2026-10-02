@@ -558,10 +558,9 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
       'Referer':                 `${ZAD_BASE}/bounty/${bountyId}`,
     };
 
-    // Include username in payload — ZAD may read it to display on their site
+    // Match the object sent by ZeroAuthDAO's live bounty submission action.
     const payload = [{
-      bountyId, submitterAddress: address, signedTxHex, summary, submissionUrl: submissionUrl || null, answers: [],
-      ...(typeof profile.username === 'string' && profile.username.trim() ? { username: profile.username.trim() } : {}),
+      bountyId, submitterAddress: address, signedTxHex, summary, submissionUrl: submissionUrl || null,
     }];
 
     const subRes = await axios.post(`${ZAD_BASE}/bounty/${bountyId}`, payload, { headers, timeout: 30000 });
