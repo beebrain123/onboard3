@@ -288,7 +288,23 @@ async function assignWallet(userId) {
 }
 
 const ZAD_CONTRACT_ADDRESS = 'SP2GW18TVQR75W1VT53HYGBRGKFRV5BFYNAF5SS5J';
-const ZAD_CONTRACT_NAME    = 'ZADAO-V2-MultiW-Bounty';
+
+async function resolveBountyContractName(bountyId, creationTxId) {
+  const txId = String(creationTxId || "").replace(/^0x/i, "");
+  if (!/^[a-f0-9]{64}$/i.test(txId)) throw new Error("Missing valid ZeroAuthDAO bounty creation transaction ID.");
+  const headers = {};
+  if (process.env.HIRO_API_KEY) headers["x-api-key"] = process.env.HIRO_API_KEY;
+  const response = await axios.get(HIRO_API + "/extended/v1/tx/" + txId, { timeout: 12000, headers });
+  const tx = response.data, call = tx && tx.contract_call;
+  if (!tx || tx.tx_status !== "success" || !call || call.function_name !== "create-bounty") throw new Error("Bounty creation transaction is not confirmed on Stacks.");
+  const arg = (call.function_args || []).find(item => item.name === "bounty-id");
+  if (String((arg && arg.repr) || "").slice(1, -1) !== bountyId) throw new Error("Bounty creation transaction ID does not match this bounty.");
+  const parts = String(call.contract_id || "").split(".");
+  const address = parts.shift(), name = parts.join(".");
+  if (address !== ZAD_CONTRACT_ADDRESS || !/^ZADAO-V2-[A-Za-z0-9-]+$/.test(name)) throw new Error("Unsupported ZeroAuthDAO contract.");
+  return name;
+}
+
 const FEE_WALLET_PATH      = "m/44'/5757'/1'/0/0"; // separate account, never used for user wallets
 const SPONSOR_FEE          = BigInt(3000); // 0.003 STX per submission
 
@@ -305,7 +321,7 @@ async function getFeeKey() {
 // Submit a bounty entry on-chain to ZeroAuthDAO from the user's custodial wallet
 // Fee is sponsored by ONBOARD3's fee wallet — user wallet needs zero STX balance
 // ZAD's Server Action broadcasts the tx AND creates the DB record (so it appears on their site)
-async function submitBountyOnChain(userId, bountyId, summary, submissionUrl) {
+async function submitBountyOnChain(userId, bountyId, summary, submissionUrl, creationTxId) {
   const User = require('../models/User');
   const user = await User.findById(userId).select('stacksWalletIndex stacksAddress username profilePicture').lean();
   if (!user || user.stacksWalletIndex == null) throw new Error('User has no Stacks wallet assigned');
@@ -314,11 +330,13 @@ async function submitBountyOnChain(userId, bountyId, summary, submissionUrl) {
   const userKey = derivePrivKey(parent, user.stacksWalletIndex);
   const feeKey  = await getFeeKey();
   const network = STACKS_MAINNET;
+  const contractName = await resolveBountyContractName(bountyId, creationTxId);
+  console.log('[ZAD] Submission contract selected:', ZAD_CONTRACT_ADDRESS + '.' + contractName);
 
   // Build transaction with sponsored: true so user wallet pays no fees
   const tx = await makeContractCall({
     contractAddress: ZAD_CONTRACT_ADDRESS,
-    contractName:    ZAD_CONTRACT_NAME,
+    contractName,
     functionName:    'submit-entry',
     functionArgs:    [stringAsciiCV(bountyId)],
     senderKey:       userKey,

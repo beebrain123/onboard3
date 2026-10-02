@@ -361,7 +361,7 @@ exports.submitToExternalBounty = async (req, res) => {
     let serverAccepted = false;
     let onChainError = null;
     try {
-      const onChain = await sw.submitBountyOnChain(req.session.userId, bountyId, taggedSummary, submissionUrl?.trim() || null);
+      const onChain = await sw.submitBountyOnChain(req.session.userId, bountyId, taggedSummary, submissionUrl?.trim() || null, zadBounty.txId);
       txId = onChain.txId;
       serverSubmissionId = onChain.zadSubId || null;
       serverAccepted = Boolean(onChain.accepted);
