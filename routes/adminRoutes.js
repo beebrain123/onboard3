@@ -1939,16 +1939,19 @@ async function runRefreshJob() {
         continue;
       }
       const checkedAt = new Date();
-      const microSTX  = await stacksWallet.getBalance(u.stacksAddress, 1);
+      const [microSTX, usdcxBalance] = await Promise.all([
+        stacksWallet.getBalance(u.stacksAddress, 1),
+        stacksWallet.getUSDCxBalance(u.stacksAddress),
+      ]);
       if (microSTX < 0) {
         _refreshJob.failed++;
         _refreshJob.errors.push({ id: u._id.toString(), address: u.stacksAddress });
         console.error(`[refresh-job] FAILED (${i+1}/${users.length}): ${u.stacksAddress}`);
       } else {
         const usd = Math.round((microSTX / 1_000_000) * _refreshJob.stxPrice * 100) / 100;
-        await User.findByIdAndUpdate(u._id, { stacksBalance: microSTX, stacksBalanceUSD: usd, stacksCheckedAt: checkedAt });
+        await User.findByIdAndUpdate(u._id, { stacksBalance: microSTX, stacksBalanceUSD: usd, usdcxBalance: Number(usdcxBalance), stacksCheckedAt: checkedAt });
         _refreshJob.updated++;
-        _refreshJob.wallets.push({ id: u._id.toString(), microSTX, stx: microSTX / 1_000_000, usd, checkedAt });
+        _refreshJob.wallets.push({ id: u._id.toString(), microSTX, stx: microSTX / 1_000_000, usd, usdcxBalance, checkedAt });
         console.log(`[refresh-job] OK (${i+1}/${users.length}): ${u.stacksAddress.slice(0,12)}... = ${(microSTX/1e6).toFixed(4)} STX`);
       }
       _refreshJob.done = i + 1;
@@ -1971,7 +1974,7 @@ router.get('/stacks-wallets', isAdminPage, async (req, res) => {
     const User = require('../models/User');
     const users = await User.find({ stacksWalletIndex: { $ne: null } })
       .sort({ stacksBalance: -1 })
-      .select('username email stacksWalletIndex stacksAddress stacksBalance stacksBalanceUSD stacksCheckedAt usdcBalance')
+      .select('username email stacksWalletIndex stacksAddress stacksBalance stacksBalanceUSD usdcxBalance stacksCheckedAt usdcBalance')
       .lean();
 
     const stxPrice  = await stacksWallet.getSTXPrice();
@@ -2006,12 +2009,15 @@ router.post('/stacks-wallets/refresh', isAdminPage, async (req, res) => {
       const user = await User.findById(userId).select('stacksAddress').lean();
       if (!user?.stacksAddress) return res.json({ success: false, message: 'Wallet not found' });
       const stxPrice = await stacksWallet.getSTXPrice();
-      const microSTX = await stacksWallet.getBalance(user.stacksAddress, 2);
+      const [microSTX, usdcxBalance] = await Promise.all([
+        stacksWallet.getBalance(user.stacksAddress, 2),
+        stacksWallet.getUSDCxBalance(user.stacksAddress),
+      ]);
       if (microSTX < 0) return res.json({ success: false, message: 'Hiro API failed — try again shortly' });
       const usd = Math.round((microSTX / 1_000_000) * stxPrice * 100) / 100;
       const checkedAt = new Date();
-      await User.findByIdAndUpdate(userId, { stacksBalance: microSTX, stacksBalanceUSD: usd, stacksCheckedAt: checkedAt });
-      return res.json({ success: true, wallets: [{ id: userId, microSTX, stx: microSTX / 1_000_000, usd, checkedAt }], stxPrice });
+      await User.findByIdAndUpdate(userId, { stacksBalance: microSTX, stacksBalanceUSD: usd, usdcxBalance: Number(usdcxBalance), stacksCheckedAt: checkedAt });
+      return res.json({ success: true, wallets: [{ id: userId, microSTX, stx: microSTX / 1_000_000, usd, usdcxBalance, checkedAt }], stxPrice });
     }
 
     // ── Bulk: start background job, return immediately ──

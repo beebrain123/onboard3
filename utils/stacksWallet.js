@@ -2,7 +2,7 @@ const bip32   = require('@scure/bip32');
 const bip39   = require('@scure/bip39');
 const crypto  = require('crypto');
 const { wordlist } = require('@scure/bip39/wordlists/english');
-const { makeSTXTokenTransfer, makeContractCall, broadcastTransaction, sponsorTransaction, AnchorMode, getAddressFromPrivateKey, stringAsciiCV, signWithKey } = require('@stacks/transactions');
+const { makeSTXTokenTransfer, makeContractCall, broadcastTransaction, sponsorTransaction, AnchorMode, getAddressFromPrivateKey, stringAsciiCV, uintCV, standardPrincipalCV, noneCV, signWithKey, Pc } = require('@stacks/transactions');
 const { signatureVrsToRsv } = require('@stacks/common');
 const { STACKS_MAINNET } = require('@stacks/network');
 const { getPublicKeyFromPrivate, hashMessage } = require('@stacks/encryption');
@@ -11,6 +11,9 @@ const axios  = require('axios');
 const HIRO_API    = 'https://api.mainnet.hiro.so';
 const STACKS_PATH = "m/44'/5757'/0'/0";
 const NETWORK_FEE = BigInt(2000); // 0.002 STX
+const USDCX_CONTRACT_ADDRESS = 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE';
+const USDCX_CONTRACT_NAME = 'usdcx';
+const USDCX_ASSET_PREFIX = `${USDCX_CONTRACT_ADDRESS}.${USDCX_CONTRACT_NAME}::`;
 
 // Cache parent HD key in memory — derived once, used for all users
 let _parent    = null;
@@ -59,6 +62,47 @@ async function getBalance(address, retries = 2) {
   return -1;
 }
 
+async function getFungibleBalances(address) {
+  const headers = {};
+  if (process.env.HIRO_API_KEY) headers['x-api-key'] = process.env.HIRO_API_KEY;
+  const res = await axios.get(`${HIRO_API}/extended/v1/address/${address}/balances`, { timeout: 10000, headers });
+  return Object.entries(res.data.fungible_tokens || {}).map(([assetId, token]) => {
+    const parts = assetId.split('::');
+    const contract = parts[0] || '';
+    const assetName = parts[1] || '';
+    const match = /^([A-Z0-9]{30,41})\.([a-zA-Z][a-zA-Z0-9-]{0,39})$/.exec(contract);
+    const balance = String(token.balance || '0');
+    if (!match || !/^[a-zA-Z][a-zA-Z0-9-]{0,39}$/.test(assetName) || !/^\d+$/.test(balance) || BigInt(balance) <= 0n) return null;
+    return { assetId, contractAddress: match[1], contractName: match[2], assetName, balance };
+  }).filter(Boolean);
+}
+
+async function getUSDCxBalance(address) {
+  const tokens = await getFungibleBalances(address);
+  const token = tokens.find(t => t.assetId.startsWith(USDCX_ASSET_PREFIX));
+  return token ? token.balance : '0';
+}
+async function getTransactionStatus(txId) {
+  const headers = {};
+  if (process.env.HIRO_API_KEY) headers['x-api-key'] = process.env.HIRO_API_KEY;
+  try {
+    const res = await axios.get(`${HIRO_API}/extended/v1/tx/${txId}`, { timeout: 10000, headers });
+    return res.data.tx_status || 'pending';
+  } catch (err) {
+    if (err.response?.status === 404) return 'pending';
+    throw err;
+  }
+}
+
+async function waitForTransaction(txId, attempts = 24, delayMs = 5000) {
+  for (let i = 0; i < attempts; i++) {
+    const status = await getTransactionStatus(txId);
+    if (status === 'success' || status.startsWith('abort_')) return status;
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  return 'pending';
+}
+
 // STX price cache (10 min TTL)
 let _stxPrice = 0, _stxPriceAt = 0;
 async function getSTXPrice() {
@@ -71,58 +115,143 @@ async function getSTXPrice() {
   return _stxPrice;
 }
 
-// Sweep user wallet → main wallet, credit user USDC (minus platform fee)
+// Sweep the supported USDCx SIP-010 token and native STX to the main wallet.
 async function sweepWallet(userId) {
-  const User    = require('../models/User');
+  const User = require('../models/User');
   const mainWallet = process.env.STACKS_MAIN_WALLET;
   if (!mainWallet) throw new Error('STACKS_MAIN_WALLET not set');
 
   const user = await User.findById(userId);
   if (!user || user.stacksWalletIndex == null) throw new Error('User has no Stacks wallet');
-
-  const parent  = await getParent();
-  const privKey = derivePrivKey(parent, user.stacksWalletIndex);
+  if (user.stacksPendingUSDCxSweep?.txId) {
+    const pending = user.stacksPendingUSDCxSweep;
+    const status = await getTransactionStatus(pending.txId);
+    if (status === 'success') {
+      const amount = Number(pending.amount);
+      user.usdcBalance = Math.round(((user.usdcBalance || 0) + amount) * 100) / 100;
+      if (!user.recentActivity) user.recentActivity = [];
+      user.recentActivity.unshift({ action: `USDCx bounty drop swept: $${amount.toFixed(2)} USDC credited`, timestamp: new Date() });
+      if (user.recentActivity.length > 10) user.recentActivity = user.recentActivity.slice(0, 10);
+      user.usdcxBalance = 0;
+      user.stacksPendingUSDCxSweep = null;
+      await user.save();
+      return { txId: pending.txId, txIds: [pending.txId], sweptTokens: [{ assetId: `${USDCX_ASSET_PREFIX}usdcx-token`, amount: String(Math.round(amount * 1_000_000)), txId: pending.txId }], errors: [], usdcxCredit: amount, pending: false, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
+    }
+    if (status.startsWith('abort_')) {
+      user.stacksPendingUSDCxSweep = null;
+      await user.save();
+      throw new Error(`Previous USDCx sweep failed on-chain (${status}); no USDCx balance was credited`);
+    }
+    return { txId: pending.txId, txIds: [pending.txId], sweptTokens: [], errors: [], usdcxCredit: 0, pending: true, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
+  }
+  const privKey = derivePrivKey(await getParent(), user.stacksWalletIndex);
   const address = getAddressFromPrivateKey(privKey);
-
-  const microSTX = await getBalance(address);
-  if (microSTX <= 0) throw new Error('Wallet has no balance');
-  if (BigInt(microSTX) <= NETWORK_FEE) throw new Error('Balance too low to cover network fee');
-
-  const sendAmount = BigInt(microSTX) - NETWORK_FEE;
-
   const network = STACKS_MAINNET;
-  const tx = await makeSTXTokenTransfer({
-    recipient:  mainWallet,
-    amount:     sendAmount,
-    senderKey:  privKey,
-    network,
-    anchorMode: AnchorMode.Any,
-    fee:        NETWORK_FEE,
-  });
+  const txIds = [];
+  const sweptTokens = [];
+  const errors = [];
+  let usdcxCredit = 0;
+  // Only sweep USDCx for now. This allowlist can be expanded as other tokens
+  // are explicitly added and supported.
+  const allTokenBalances = await getFungibleBalances(address);
+  const tokenBalances = allTokenBalances.filter(token => token.assetId.startsWith(USDCX_ASSET_PREFIX));
+  let nonce;
+  if (tokenBalances.length) {
+    const headers = {};
+    if (process.env.HIRO_API_KEY) headers['x-api-key'] = process.env.HIRO_API_KEY;
+    const nonceResponse = await axios.get(`${HIRO_API}/extended/v1/address/${address}/nonces`, { timeout: 10000, headers });
+    nonce = BigInt(nonceResponse.data.possible_next_nonce ?? (Number(nonceResponse.data.last_executed_tx_nonce || -1) + 1));
+  }
+  for (const token of tokenBalances) {
+    try {
+      const unsignedTx = await makeContractCall({
+        contractAddress: USDCX_CONTRACT_ADDRESS,
+        contractName: USDCX_CONTRACT_NAME,
+        functionName: 'transfer',
+        functionArgs: [uintCV(BigInt(token.balance)), standardPrincipalCV(address), standardPrincipalCV(mainWallet), noneCV()],
+        senderKey: privKey,
+        network,
+        anchorMode: AnchorMode.Any,
+        nonce,
+        sponsored: true,
+        postConditions: [Pc.principal(address).willSendEq(BigInt(token.balance)).ft(`${USDCX_CONTRACT_ADDRESS}.${USDCX_CONTRACT_NAME}`, token.assetName)],
+      });
+      // The user's wallet pays no STX: sponsor USDCx transfer gas from the
+      // existing ONBOARD3 fee wallet.
+      const tx = await sponsorTransaction({
+        transaction: unsignedTx,
+        sponsorPrivateKey: await getFeeKey(),
+        fee: SPONSOR_FEE,
+        network,
+      });
+      const result = await broadcastTransaction({ transaction: tx, network });
+      if (result.error) throw new Error(result.error);
+      const tokenCredit = Number(token.balance) / 1_000_000;
+      user.stacksPendingUSDCxSweep = { txId: result.txid, amount: tokenCredit, createdAt: new Date() };
+      await user.save();
+      const status = await waitForTransaction(result.txid);
+      if (status === 'pending') {
+        return { txId: result.txid, txIds: [result.txid], sweptTokens: [{ assetId: token.assetId, amount: token.balance, txId: result.txid }], errors, usdcxCredit: 0, pending: true, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
+      }
+      if (status !== 'success') {
+        user.stacksPendingUSDCxSweep = null;
+        await user.save();
+        throw new Error(`USDCx transfer failed on-chain (${status}); no USDCx balance was credited`);
+      }
+      txIds.push(result.txid);
+      sweptTokens.push({ assetId: token.assetId, amount: token.balance, txId: result.txid });
+      usdcxCredit += tokenCredit;
+      user.usdcBalance = Math.round(((user.usdcBalance || 0) + tokenCredit) * 100) / 100;
+      if (!user.recentActivity) user.recentActivity = [];
+      user.recentActivity.unshift({ action: `USDCx bounty drop swept: ${tokenCredit.toFixed(2)} USDC credited`, timestamp: new Date() });
+      if (user.recentActivity.length > 10) user.recentActivity = user.recentActivity.slice(0, 10);
+      user.stacksPendingUSDCxSweep = null;
+      user.usdcxBalance = 0;
+      nonce += 1n;
+    } catch (err) {
+      errors.push({ assetId: token.assetId, message: err.message });
+      // Avoid nonce conflicts after a failed contract-call broadcast.
+      break;
+    }
+  }
 
-  const result = await broadcastTransaction({ transaction: tx, network });
-  if (result.error) throw new Error(result.error);
+  let totalSTX = 0;
+  let totalUSD = 0;
+  let platformCut = 0;
+  let userCredit = 0;
+  const microSTX = await getBalance(address);
+  if (microSTX < 0) errors.push({ assetId: 'STX', message: 'Could not read STX balance' });
+  else if (errors.length === 0 && BigInt(microSTX) > NETWORK_FEE) {
+    const sendAmount = BigInt(microSTX) - NETWORK_FEE;
+    try {
+      const tx = await makeSTXTokenTransfer({ recipient: mainWallet, amount: sendAmount, senderKey: privKey, network, anchorMode: AnchorMode.Any, fee: NETWORK_FEE, ...(nonce === undefined ? {} : { nonce }) });
+      const result = await broadcastTransaction({ transaction: tx, network });
+      if (result.error) throw new Error(result.error);
+      txIds.push(result.txid);
+      totalSTX = Number(sendAmount) / 1_000_000;
+      const stxPrice = await getSTXPrice();
+      totalUSD = totalSTX * stxPrice;
+      platformCut = totalUSD * 0.10;
+      userCredit = Math.round((totalUSD - platformCut) * 100) / 100;
+      user.usdcBalance = Math.round(((user.usdcBalance || 0) + userCredit) * 100) / 100;
+      if (!user.recentActivity) user.recentActivity = [];
+      user.recentActivity.unshift({
+        action: `Bounty reward swept: $${userCredit} USDC credited (${totalSTX.toFixed(4)} STX, 10% platform fee deducted)`,
+        timestamp: new Date()
+      });
+      if (user.recentActivity.length > 10) user.recentActivity = user.recentActivity.slice(0, 10);
+    } catch (err) {
+      errors.push({ assetId: 'STX', message: err.message });
+    }
+  }
 
-  // Calculate USDC credit (90% of value)
-  const stxPrice   = await getSTXPrice();
-  const totalSTX   = Number(sendAmount) / 1_000_000;
-  const totalUSD   = totalSTX * stxPrice;
-  const platformCut = totalUSD * 0.10;
-  const userCredit  = Math.round((totalUSD - platformCut) * 100) / 100;
-
-  user.usdcBalance     = Math.round(((user.usdcBalance || 0) + userCredit) * 100) / 100;
-  user.stacksBalance   = 0;
+  if (txIds.length === 0) throw new Error(errors[0]?.message || 'Wallet has no sweepable balance or token transfer fees are not funded');
+  user.stacksBalance = 0;
   user.stacksBalanceUSD = 0;
+  user.usdcxBalance = 0;
   user.stacksCheckedAt = new Date();
-  if (!user.recentActivity) user.recentActivity = [];
-  user.recentActivity.unshift({
-    action: `Bounty reward swept: $${userCredit} USDC credited (${totalSTX.toFixed(4)} STX, 10% platform fee deducted)`,
-    timestamp: new Date()
-  });
-  if (user.recentActivity.length > 10) user.recentActivity = user.recentActivity.slice(0, 10);
   await user.save();
-
-  return { txId: result.txid, totalSTX, totalUSD, platformCut, userCredit };
+  return { txId: txIds[txIds.length - 1], txIds, sweptTokens, errors, usdcxCredit, totalSTX, totalUSD, platformCut, userCredit };
 }
 
 // Assign a wallet to a user (on first bounty submission)
@@ -497,4 +626,4 @@ async function ensureZADProfile(userId) {
   console.log('[ZAD] Profile ensured for:', user.username, address);
 }
 
-module.exports = { getAddress, getBalance, getSTXPrice, sweepWallet, assignWallet, submitBountyOnChain, getFeeWalletInfo, submitToZADWebAPI, ensureZADProfile };
+module.exports = { getAddress, getBalance, getFungibleBalances, getUSDCxBalance, getSTXPrice, sweepWallet, assignWallet, submitBountyOnChain, getFeeWalletInfo, submitToZADWebAPI, ensureZADProfile };

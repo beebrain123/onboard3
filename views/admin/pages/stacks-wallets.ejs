@@ -126,6 +126,7 @@
  <th>User</th>
  <th>Stacks Address</th>
  <th>STX Balance</th>
+ <th>USDCx Balance</th>
  <th>USD Value</th>
  <th>Last Checked</th>
  <th>Actions</th>
@@ -135,7 +136,9 @@
  <% users.forEach(function(u, i) {
  var stx = (u.stacksBalance || 0) / 1_000_000;
  var usd = u.stacksBalanceUSD || 0;
- var hasBalance = u.stacksBalance > 0;
+ var usdcx = Number(u.usdcxBalance || 0) / 1_000_000;
+ var hasSTX = u.stacksBalance > 0;
+ var hasBalance = u.stacksBalance > 0 || u.usdcxBalance > 0;
  %>
  <tr id="row-<%= u._id %>">
  <td style="color:var(--text-3);font-size:.78rem"><%= u.stacksWalletIndex %></td>
@@ -148,10 +151,11 @@
  <button onclick="copyAddr('<%= u.stacksAddress %>')" style="background:none;border:none;cursor:pointer;color:var(--text-3);padding:.1rem .3rem;margin-left:.25rem;font-size:.75rem" title="Copy"><i class="fas fa-copy"></i></button>
  </td>
  <td>
- <span class="<%= hasBalance ? 'sw-bal' : 'sw-zero' %>">
+ <span class="<%= hasSTX ? 'sw-bal' : 'sw-zero' %>">
  <%= stx.toFixed(6) %> STX
  </span>
  </td>
+ <td><span class="<%= usdcx > 0 ? 'sw-bal' : 'sw-zero' %>"><%= usdcx.toFixed(6) %> USDCx</span></td>
  <td>
  <span class="<%= hasBalance ? 'sw-bal' : 'sw-zero' %>">
  $<%= usd.toFixed(2) %>
@@ -201,6 +205,7 @@ function refreshOne(userId, btn) {
  }).then(function(r) { return r.json(); }).then(function(d) {
   btn.innerHTML = orig;
   btn.disabled = false;
+
   if (d.success) {
    applyJobResults(d);
    aToast('Balance updated');
@@ -269,11 +274,14 @@ function applyJobResults(d) {
  (d.wallets || []).forEach(function(w) {
   var row = document.getElementById('row-' + w.id);
   if (!row) return;
-  var hasBalance = w.microSTX > 0;
-  var cls = hasBalance ? 'sw-bal' : 'sw-zero';
-  var stxCell = row.cells[3], usdCell = row.cells[4], chkCell = row.cells[5];
+  var usdcxBalance = Number(w.usdcxBalance || 0);
+  var hasBalance = w.microSTX > 0 || usdcxBalance > 0;
+  var stxCls = w.microSTX > 0 ? 'sw-bal' : 'sw-zero';
+  var cls = Number(w.usd) > 0 ? 'sw-bal' : 'sw-zero';
+  var stxCell = row.cells[3], usdcxCell = row.cells[4], usdCell = row.cells[5], chkCell = row.cells[6];
   var sweepBtn = row.querySelector('.sw-btn-sweep');
-  if (stxCell) stxCell.innerHTML = '<span class="' + cls + '">' + Number(w.stx).toFixed(6) + ' STX</span>';
+  if (stxCell) stxCell.innerHTML = '<span class="' + stxCls + '">' + Number(w.stx).toFixed(6) + ' STX</span>';
+  if (usdcxCell) usdcxCell.innerHTML = '<span class="' + (usdcxBalance > 0 ? 'sw-bal' : 'sw-zero') + '">' + (usdcxBalance / 1000000).toFixed(6) + ' USDCx</span>';
   if (usdCell) usdCell.innerHTML = '<span class="' + cls + '">$' + Number(w.usd).toFixed(2) + '</span>';
   if (chkCell) chkCell.textContent = new Date(w.checkedAt).toLocaleString();
   if (sweepBtn) { sweepBtn.disabled = !hasBalance; sweepBtn.classList.toggle('disabled', !hasBalance); }
@@ -282,7 +290,7 @@ function applyJobResults(d) {
  (d.errors || []).forEach(function(e) {
   var row = document.getElementById('row-' + e.id);
   if (!row) return;
-  var chkCell = row.cells[5];
+  var chkCell = row.cells[6];
   if (chkCell) chkCell.innerHTML = '<span style="color:#f87171;font-size:.75rem"><i class="fas fa-triangle-exclamation"></i> API failed</span>';
  });
  var stxEl = document.getElementById('statSTX'), usdEl = document.getElementById('statUSD');
@@ -311,7 +319,7 @@ function startPolling(btn, origHtml) {
 }
 
 function sweep(userId, username, btn) {
- if (!confirm('Sweep ' + username + "'s wallet to your main Stacks address?\n\n• All STX will be transferred\n• User receives 90% as USDC on their balance\n• 10% platform fee kept")) return;
+ if (!confirm('Sweep ' + username + "'s wallet to your main Stacks address?\n\nSTX and USDCx will be transferred. USDCx gas is paid by the ONBOARD3 fee wallet.\nThe existing STX-to-USDC balance credit rule stays the same.")) return;
  var orig = btn.innerHTML;
  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sweeping...';
  btn.disabled = true;
@@ -319,8 +327,16 @@ function sweep(userId, username, btn) {
   method: 'POST', headers: { 'Content-Type': 'application/json' }
  }).then(function(r) { return r.json(); }).then(function(d) {
   btn.innerHTML = orig;
+  if (d.success && d.pending) {
+   aToast('USDCx sweep submitted; waiting for on-chain confirmation. The user balance will update only after success.');
+   setTimeout(function() { location.reload(); }, 2000);
+   return;
+  }
   if (d.success) {
-   aToast(username + ' swept — $' + d.userCredit.toFixed(2) + ' USDC credited (tx: ' + d.txId.slice(0,12) + '...)');
+   var tokenCount = (d.sweptTokens || []).length;
+   var txCount = (d.txIds || [d.txId]).length;
+   aToast(username + ' swept: ' + Number(d.usdcxCredit || 0).toFixed(2) + ' USDCx credited, ' + Number(d.totalSTX || 0).toFixed(6) + ' STX; $' + Number(d.userCredit || 0).toFixed(2) + ' STX credit across ' + txCount + ' tx(s)');
+   if ((d.errors || []).length) aToast('Some assets were not swept: ' + d.errors.map(function(e) { return e.assetId + ': ' + e.message; }).join('; '), 'error');
    setTimeout(function() { location.reload(); }, 1500);
   } else {
    btn.disabled = false;
@@ -344,5 +360,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }).catch(function() {});
 });
 </script>
+<%- include('../../partials/whatsapp-float') %>
 </body>
 </html>

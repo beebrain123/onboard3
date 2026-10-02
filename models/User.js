@@ -356,6 +356,8 @@ const userSchema = new mongoose.Schema({
   zeroAuthAvatarUrl:  { type: String, default: null },
   stacksBalance:     { type: Number, default: 0 },    // cached microSTX
   stacksBalanceUSD:  { type: Number, default: 0 },    // cached USD value
+  usdcxBalance:      { type: Number, default: 0 },    // cached raw USDCx units (6 decimals)
+  stacksPendingUSDCxSweep: { type: mongoose.Schema.Types.Mixed, default: null },
   stacksCheckedAt:   { type: Date,   default: null },
 
   createdAt: {
