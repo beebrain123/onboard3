@@ -442,18 +442,15 @@
  <div class="a-form-row">
  <div class="a-form-group" style="margin-bottom:0">
  <label>Top Winners Count</label>
- <input type="number" name="topWinnersCount" class="a-input" value="10" min="1">
+ <input type="number" name="topWinnersCount" id="cqTopWinners" class="a-input" value="10" min="1" max="100" oninput="renderQuestRankShares('create')">
  </div>
  <div class="a-form-group" style="margin-bottom:0">
  <label>Winner Bonus XP</label>
  <input type="number" name="winnerBonusXP" class="a-input" value="0" min="0">
  </div>
  </div>
- <div class="a-form-row" style="margin-top:.75rem">
- <div class="a-form-group" style="margin-bottom:0"><label>1st place share (%)</label><input type="number" name="firstPlacePercent" class="a-input" value="50" min="0" max="100" step="0.1"></div>
- <div class="a-form-group" style="margin-bottom:0"><label>2nd place share (%)</label><input type="number" name="secondPlacePercent" class="a-input" value="30" min="0" max="100" step="0.1"></div>
- </div>
- <small style="display:block;color:var(--text-3);margin-top:.5rem">3rd place and remaining winners split the percentage left after 1st and 2nd equally.</small>
+ <div id="cqRankShares" class="a-form-row" style="margin-top:.75rem"></div>
+ <small id="cqRankSharesTotal" style="display:block;color:var(--text-3);margin-top:.5rem">Set each winner's share. Percentages must total 100%.</small>
  </div>
 
  <div class="a-form-row">
@@ -618,14 +615,11 @@
  <div style="background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.16);border-radius:10px;padding:1rem;margin-bottom:.875rem">
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#c084fc;margin-bottom:.75rem"><i class="fas fa-medal"></i> Competition Reward Split</p>
  <div class="a-form-row">
- <div class="a-form-group"><label>Top winners</label><input type="number" id="sq_topWinners" class="a-input" min="1" value="10"></div>
+ <div class="a-form-group"><label>Top winners</label><input type="number" id="sq_topWinners" class="a-input" min="1" max="100" value="10" oninput="renderQuestRankShares('settings')"></div>
  <div class="a-form-group"><label>Winner bonus XP</label><input type="number" id="sq_winnerBonusXP" class="a-input" min="0" value="0"></div>
  </div>
- <div class="a-form-row">
- <div class="a-form-group"><label>1st place (%)</label><input type="number" id="sq_firstPlacePercent" class="a-input" min="0" max="100" step="0.1" value="50"></div>
- <div class="a-form-group"><label>2nd place (%)</label><input type="number" id="sq_secondPlacePercent" class="a-input" min="0" max="100" step="0.1" value="30"></div>
- </div>
- <small style="color:var(--text-3)">The remaining budget is split equally between 3rd place and the other winners.</small>
+ <div id="sqRankShares" class="a-form-row"></div>
+ <small id="sqRankSharesTotal" style="color:var(--text-3)">Set each winner share; percentages must total 100%.</small>
  </div>
 
  <!-- Reward Plan -->
@@ -724,8 +718,27 @@ function onCqTypeChange() {
  document.getElementById('cqCompConfig').style.display = t==='competition' ? 'block' : 'none';
  document.getElementById('cqReferralConfig').style.display = t==='referral_boost' ? 'block' : 'none';
  document.getElementById('cqReferralEnabled').value = t==='referral_boost' ? 'true' : 'false';
+ if(t==='competition')renderQuestRankShares('create');
 }
 
+function renderQuestRankShares(mode, values) {
+ var countInput=document.getElementById(mode==='create'?'cqTopWinners':'sq_topWinners');
+ var holder=document.getElementById(mode==='create'?'cqRankShares':'sqRankShares'); if(!countInput||!holder)return;
+ var count=Math.max(1,Math.min(100,parseInt(countInput.value,10)||1)); countInput.value=count;
+ var current=values||getQuestRankShares(mode);
+ if(current.length!==count){var each=Math.floor(10000/count)/100;current=Array(count).fill(each);current[count-1]=Number((100-each*(count-1)).toFixed(2));}
+ holder.innerHTML='';
+ for(var i=0;i<count;i++){
+  var field=document.createElement('div');field.className='a-form-group';field.style.marginBottom='0';
+  var label=document.createElement('label');label.textContent=(i+1)+(i===0?'st':i===1?'nd':i===2?'rd':'th')+' place (%)';
+  var input=document.createElement('input');input.type='number';input.className='a-input quest-rank-share';input.min='0';input.max='100';input.step='0.1';input.value=Number(current[i])>=0?Number(current[i]):0;
+  if(mode==='create')input.name='rankPercentages[]';input.oninput=function(){updateQuestRankShareTotal(mode);};
+  field.appendChild(label);field.appendChild(input);holder.appendChild(field);
+ }
+ updateQuestRankShareTotal(mode);
+}
+function getQuestRankShares(mode){var h=document.getElementById(mode==='create'?'cqRankShares':'sqRankShares');return h?Array.from(h.querySelectorAll('.quest-rank-share')).map(function(i){return parseFloat(i.value)||0;}):[];}
+function updateQuestRankShareTotal(mode){var total=getQuestRankShares(mode).reduce(function(a,b){return a+b;},0);var l=document.getElementById(mode==='create'?'cqRankSharesTotal':'sqRankSharesTotal');if(l){l.textContent='Total: '+total.toFixed(1)+'% (must equal 100%).';l.style.color=Math.abs(total-100)<0.01?'var(--green)':'#f59e0b';}}
 function onTaskTypeChange() {
  var type = document.getElementById('nt_type').value;
  var approvalRow = document.getElementById('approvalToggleRow');
@@ -782,8 +795,7 @@ function openQuestManager(id, title, type) {
  document.getElementById('sq_referralComplete').value = (q.referralConfig && q.referralConfig.xpPerReferralComplete) || 0;
  document.getElementById('sq_topWinners').value = (q.competitionConfig && q.competitionConfig.topWinnersCount) || 10;
  document.getElementById('sq_winnerBonusXP').value = (q.competitionConfig && q.competitionConfig.winnerBonusXP) || 0;
- document.getElementById('sq_firstPlacePercent').value = q.competitionConfig?.firstPlacePercent ?? 50;
- document.getElementById('sq_secondPlacePercent').value = q.competitionConfig?.secondPlacePercent ?? 30;
+ renderQuestRankShares('settings', q.competitionConfig?.rankPercentages);
  calcSqPlan();
  }).catch(function(){});
  /* reset to tasks tab */
@@ -1091,8 +1103,9 @@ function saveQuestSettings() {
  xpPerReferralComplete: parseInt(document.getElementById('sq_referralComplete').value) || 0,
  topWinnersCount: parseInt(document.getElementById('sq_topWinners').value) || 10,
  winnerBonusXP: parseInt(document.getElementById('sq_winnerBonusXP').value) || 0,
- firstPlacePercent: parseFloat(document.getElementById('sq_firstPlacePercent').value) || 0,
- secondPlacePercent: parseFloat(document.getElementById('sq_secondPlacePercent').value) || 0
+ firstPlacePercent: getQuestRankShares('settings')[0] || 0,
+ secondPlacePercent: getQuestRankShares('settings')[1] || 0,
+ rankPercentages: getQuestRankShares('settings')
  })
  }).then(function(r){ return r.json(); })
  .then(function(d) {

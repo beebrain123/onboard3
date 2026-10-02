@@ -346,21 +346,11 @@ async function submitBountyOnChain(userId, bountyId, summary, submissionUrl) {
   });
   console.log('[ZAD] Web2 result:', webResult);
 
-  // If ZAD broadcast it, use the txId from their response; otherwise fall back to broadcasting ourselves
-  let txId = webResult.txId;
-  if (!txId) {
-    const result = await broadcastTransaction({ transaction: sponsored, network });
-    // Treat "already in mempool/confirmed" as success — ZAD may have already broadcast it
-    const alreadyExists = result.error && /ConflictingNonce|AlreadyExists|already/i.test(result.reason || result.error);
-    if (result.error && !alreadyExists) {
-      throw new Error(result.error + (result.reason ? ': ' + result.reason : ''));
-    }
-    txId = result.txid || null;
-  }
+  if (!webResult.success) throw new Error('ZeroAuthDAO did not confirm this submission. Please retry later.');
+  const txId = webResult.txId;
+  if (!txId && !webResult.zadSubId) throw new Error('ZeroAuthDAO returned no submission confirmation. Please retry later.');
 
-  if (!txId) throw new Error('Failed to submit transaction to Stacks network');
-
-  return { txId, address: user.stacksAddress, zadSubId: webResult.zadSubId };
+  return { txId: txId || null, address: user.stacksAddress, zadSubId: webResult.zadSubId };
 }
 
 async function getFeeWalletInfo() {
@@ -559,7 +549,8 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
     // ZAD uses a Next.js Server Action for submissions (not a REST endpoint)
     // Action ID found in their bundle: 3412751565eefa5c83032aedc403d0a6c1808442
     const headers = {
-      'Content-Type':            'application/json',
+      'Content-Type':            'text/plain;charset=UTF-8',
+      'Accept':                  'text/x-component',
       'Cookie':                  cookieStr,
       'Next-Action':             '3412751565eefa5c83032aedc403d0a6c1808442',
       'Next-Router-State-Tree':  '%5B%22%22%2C%7B%7D%5D',
@@ -569,7 +560,7 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
 
     // Include username in payload — ZAD may read it to display on their site
     const payload = [{
-      bountyId, submitterAddress: address, signedTxHex, summary, submissionUrl: submissionUrl || null,
+      bountyId, submitterAddress: address, signedTxHex, summary, submissionUrl: submissionUrl || null, answers: [],
       ...(typeof profile.username === 'string' && profile.username.trim() ? { username: profile.username.trim() } : {}),
     }];
 
@@ -578,6 +569,7 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
 
     const responseText = typeof subRes.data === 'string' ? subRes.data : JSON.stringify(subRes.data);
     console.log('[ZAD] Server Action response:', responseText.slice(0, 500));
+    if (/(?:^|\n)\d+:E/.test(responseText)) throw new Error('ZeroAuthDAO server action returned an error.');
 
     // Parse RSC (React Server Components) streaming response
     // Format: "0:[...]\n1:{...}\n" — look for submission id and txId in all lines
@@ -589,17 +581,21 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
         if (!match) continue;
         try {
           const parsed = JSON.parse(match[1]);
-          const obj = Array.isArray(parsed) ? parsed[1] : parsed;
-          if (obj && typeof obj === 'object') {
-            if (obj.id)    zadSubId = obj.id;
-            if (obj.txId)  txId     = obj.txId;
-            if (obj.txid)  txId     = obj.txid;
+          const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
+          const seen = new Set();
+          while (queue.length) {
+            const obj = queue.shift();
+            if (!obj || typeof obj !== 'object' || seen.has(obj)) continue;
+            seen.add(obj);
+            if (obj.id && !zadSubId) zadSubId = obj.id;
+            if ((obj.txId || obj.txid || obj.transactionId) && !txId) txId = obj.txId || obj.txid || obj.transactionId;
+            for (const value of Object.values(obj)) if (value && typeof value === 'object') queue.push(value);
           }
         } catch {}
       }
     } catch {}
 
-    return { success: true, zadSubId, txId, address };
+    return { success: Boolean(zadSubId || txId), zadSubId, txId, address };
   } catch (err) {
     const status = err.response?.status;
     const body   = err.response?.data;

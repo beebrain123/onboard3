@@ -357,29 +357,36 @@ exports.submitToExternalBounty = async (req, res) => {
 
     // Submit on-chain to ZeroAuthDAO from the user's custodial wallet
     let txId = null;
+    let serverSubmissionId = null;
     let onChainError = null;
     try {
       const onChain = await sw.submitBountyOnChain(req.session.userId, bountyId, taggedSummary, submissionUrl?.trim() || null);
       txId = onChain.txId;
+      serverSubmissionId = onChain.zadSubId || null;
     } catch (err) {
       onChainError = err.message;
       console.error('[Bounty] on-chain submit failed:', err.message);
+    }
+
+    if (!txId && !serverSubmissionId) {
+      return res.status(502).json({ success: false, message: 'ZeroAuthDAO did not confirm acceptance. Check its bounty page before retrying to avoid a duplicate.', ...(onChainError ? { error: onChainError } : {}) });
     }
 
     await ThirdPartySubmission.create({
       platform: 'zeroauthoritydao', externalBountyId: bountyId,
       bountyName: zadBounty.name || '', userId: req.session.userId,
       summary: summary.trim(), submissionUrl: submissionUrl?.trim() || null,
-      zadSubmissionId: txId, status: txId ? 'submitted' : 'pending'
+      zadSubmissionId: serverSubmissionId || txId, status: 'submitted'
     });
 
     _zadLiveCache = null; _zadLiveCacheAt = 0;
 
-    if (txId) {
+    if (txId || serverSubmissionId) {
       return res.json({
         success: true,
-        message: 'Submission sent to ZeroAuthDAO on-chain! Your entry is live.',
+        message: 'Submission confirmed by ZeroAuthDAO. Your entry is live.',
         txId,
+        submissionId: serverSubmissionId,
         stacksAddress: wallet.address
       });
     } else {

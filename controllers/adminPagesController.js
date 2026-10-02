@@ -361,7 +361,12 @@ exports.unbanUser = async (req, res) => {
 // ── POST /admin/quests/create ────────────────────────────────────────────────
 exports.createQuestPage = async (req, res) => {
     try {
-        const { title, shortDescription, description, category, difficulty, questType, baseXpReward, usdcReward, rewardPerPerson, maxWinners, startDate, endDate, image, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent } = req.body;
+        const { title, shortDescription, description, category, difficulty, questType, baseXpReward, usdcReward, rewardPerPerson, maxWinners, startDate, endDate, image, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent, rankPercentages } = req.body;
+        const rankCount = Math.max(1, Math.min(100, parseInt(topWinnersCount, 10) || 10));
+        const rankShares = (Array.isArray(rankPercentages) ? rankPercentages : rankPercentages === undefined ? [] : [rankPercentages]).map(Number);
+        if (questType === 'competition' && (rankShares.length !== rankCount || rankShares.some(p => !Number.isFinite(p) || p < 0 || p > 100) || Math.abs(rankShares.reduce((a, b) => a + b, 0) - 100) > 0.01)) {
+            return res.redirect('/admin/quests?error=rank-split');
+        }
         const { broadcast } = require('../utils/notificationService');
         const quest = new Quest({
             title, shortDescription, description,
@@ -381,10 +386,11 @@ exports.createQuestPage = async (req, res) => {
             },
             competitionConfig: {
                 enabled: questType === 'competition',
-                topWinnersCount: Math.max(1, parseInt(topWinnersCount, 10) || 10),
+                topWinnersCount: rankCount,
                 winnerBonusXP: Math.max(0, parseInt(winnerBonusXP, 10) || 0),
-                firstPlacePercent: Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 50)),
-                secondPlacePercent: Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 30))
+                firstPlacePercent: rankShares[0] ?? 50,
+                secondPlacePercent: rankShares[1] ?? 0,
+                rankPercentages: rankShares
             },
             startDate: startDate || null,
             endDate:   endDate   || null,
@@ -564,7 +570,12 @@ exports.updateQuestSettings = async (req, res) => {
     try {
         const quest = await Quest.findById(req.params.id);
         if (!quest) return res.json({ success: false, message: 'Quest not found' });
-        const { title, shortDescription, description, category, difficulty, questType, usdcReward, rewardPerPerson, maxWinners, maxParticipants, baseXpReward, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent } = req.body;
+        const { title, shortDescription, description, category, difficulty, questType, usdcReward, rewardPerPerson, maxWinners, maxParticipants, baseXpReward, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent, rankPercentages } = req.body;
+        const targetRankCount = Math.max(1, Math.min(100, parseInt(topWinnersCount ?? quest.competitionConfig?.topWinnersCount, 10) || 1));
+        const rankShares = rankPercentages === undefined ? quest.competitionConfig?.rankPercentages : (Array.isArray(rankPercentages) ? rankPercentages : [rankPercentages]).map(Number);
+        if ((rankPercentages !== undefined || topWinnersCount !== undefined) && (!Array.isArray(rankShares) || rankShares.length !== targetRankCount || rankShares.some(p => !Number.isFinite(Number(p)) || Number(p) < 0 || Number(p) > 100) || Math.abs(rankShares.reduce((sum, p) => sum + Number(p), 0) - 100) > 0.01)) {
+            return res.json({ success: false, message: 'Winner percentages must match the top winner count and total 100%.' });
+        }
         if (title !== undefined) quest.title = String(title).trim();
         if (shortDescription !== undefined) quest.shortDescription = String(shortDescription).trim();
         if (description !== undefined) quest.description = String(description).trim();
@@ -585,6 +596,11 @@ exports.updateQuestSettings = async (req, res) => {
         if (winnerBonusXP !== undefined) quest.competitionConfig.winnerBonusXP = Math.max(0, parseInt(winnerBonusXP, 10) || 0);
         if (firstPlacePercent !== undefined) quest.competitionConfig.firstPlacePercent = Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 0));
         if (secondPlacePercent !== undefined) quest.competitionConfig.secondPlacePercent = Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 0));
+        if (rankPercentages !== undefined) {
+            quest.competitionConfig.rankPercentages = rankShares.map(Number);
+            quest.competitionConfig.firstPlacePercent = rankShares[0] || 0;
+            quest.competitionConfig.secondPlacePercent = rankShares[1] || 0;
+        }
         await quest.save();
         res.json({ success: true, quest: { usdcReward: quest.usdcReward, rewardPlan: quest.rewardPlan, maxParticipants: quest.maxParticipants, baseXpReward: quest.baseXpReward } });
     } catch (err) {
