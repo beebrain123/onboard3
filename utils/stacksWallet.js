@@ -348,9 +348,9 @@ async function submitBountyOnChain(userId, bountyId, summary, submissionUrl) {
 
   if (!webResult.success) throw new Error('ZeroAuthDAO did not confirm this submission. Please retry later.');
   const txId = webResult.txId;
-  if (!txId && !webResult.zadSubId) throw new Error('ZeroAuthDAO returned no submission confirmation. Please retry later.');
+  if (!txId && !webResult.zadSubId && !webResult.accepted) throw new Error('ZeroAuthDAO returned no submission confirmation. Please retry later.');
 
-  return { txId: txId || null, address: user.stacksAddress, zadSubId: webResult.zadSubId };
+  return { txId: txId || null, address: user.stacksAddress, zadSubId: webResult.zadSubId, accepted: Boolean(webResult.accepted) };
 }
 
 async function getFeeWalletInfo() {
@@ -575,8 +575,10 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
     // Format: "0:[...]\n1:{...}\n" — look for submission id and txId in all lines
     let zadSubId = null;
     let txId = null;
+    let accepted = false;
     try {
-      for (const line of responseText.split('\n')) {
+      const responseLines = /^[\[{]/.test(responseText.trim()) ? [`0:${responseText.trim()}`] : responseText.split('\n');
+      for (const line of responseLines) {
         const match = line.match(/^\d+:(.*)/s);
         if (!match) continue;
         try {
@@ -587,15 +589,22 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
             const obj = queue.shift();
             if (!obj || typeof obj !== 'object' || seen.has(obj)) continue;
             seen.add(obj);
+            if (obj.success === true || obj.ok === true || obj.accepted === true) accepted = true;
+            if (typeof obj.status === 'string' && obj.status.toLowerCase() === 'success') accepted = true;
             if (obj.id && !zadSubId) zadSubId = obj.id;
             if ((obj.txId || obj.txid || obj.transactionId) && !txId) txId = obj.txId || obj.txid || obj.transactionId;
-            for (const value of Object.values(obj)) if (value && typeof value === 'object') queue.push(value);
+            for (const value of Object.values(obj)) {
+              if (value && typeof value === 'object') queue.push(value);
+              else if (typeof value === 'string' && /^[\[{]/.test(value.trim())) {
+                try { queue.push(JSON.parse(value)); } catch {}
+              }
+            }
           }
         } catch {}
       }
     } catch {}
 
-    return { success: Boolean(zadSubId || txId), zadSubId, txId, address };
+    return { success: Boolean(zadSubId || txId || accepted), accepted, zadSubId, txId, address };
   } catch (err) {
     const status = err.response?.status;
     const body   = err.response?.data;
