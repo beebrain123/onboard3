@@ -203,7 +203,21 @@ const questSchema = new mongoose.Schema({
     winnerBonusXP: {
       type: Number,
       default: 0
-    }
+    },
+    firstPlacePercent: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100
+    },
+    secondPlacePercent: {
+      type: Number,
+      default: 30,
+      min: 0,
+      max: 100
+    },
+    // Percentage of the USDC prize pool assigned to each place, in rank order.
+    rankPercentages: { type: [Number], default: [] }
   },
   
   // ==================== REWARDS ====================

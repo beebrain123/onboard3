@@ -524,7 +524,10 @@ exports.createQuest = async (req, res) => {
       xpPerReferralComplete,
       competitionEnabled,
       topWinnersCount,
-      winnerBonusXP
+      winnerBonusXP,
+      firstPlacePercent,
+      secondPlacePercent,
+      rankPercentages
     } = req.body;
 
     console.log('🎯 Creating quest with data:', req.body);
@@ -535,6 +538,24 @@ exports.createQuest = async (req, res) => {
         success: false,
         message: "Title, description, and short description are required"
       });
+    }
+
+    if (questType === 'referral_boost' && (Number(xpPerReferralJoin) || 0) <= 0 && (Number(xpPerReferralComplete) || 0) <= 0) {
+      return res.status(400).json({ success: false, message: 'Set XP for at least one referral milestone (joining or completing the quest) before publishing a referral boost.' });
+    }
+
+    const winnerCount = Math.max(1, Math.min(100, parseInt(topWinnersCount, 10) || 10));
+    let savedRankPercentages = Array.isArray(rankPercentages) ? rankPercentages.map(Number) : [];
+    if (questType === 'competition') {
+      if (!(Number(usdcReward) > 0)) return res.status(400).json({ success: false, message: 'Enter the USDC prize pool before publishing this competition.' });
+      if (!savedRankPercentages.length) {
+        const first = Math.min(100, Math.max(0, Number(firstPlacePercent ?? 50)));
+        const second = winnerCount > 1 ? Math.min(100 - first, Math.max(0, Number(secondPlacePercent ?? 30))) : 0;
+        savedRankPercentages = winnerCount === 1 ? [100] : winnerCount === 2 ? [first, 100 - first] : [first, second, ...Array(winnerCount - 2).fill((100 - first - second) / (winnerCount - 2))];
+      }
+      if (savedRankPercentages.length !== winnerCount || savedRankPercentages.some(p => !Number.isFinite(p) || p < 0 || p > 100) || Math.abs(savedRankPercentages.reduce((a, b) => a + b, 0) - 100) > 0.01) {
+        return res.status(400).json({ success: false, message: `Enter one percentage for each of the ${winnerCount} places. Percentages must total 100%.` });
+      }
     }
 
     // Format tasks with XP rewards
@@ -575,7 +596,9 @@ exports.createQuest = async (req, res) => {
             discordGuildId: task.discordGuildId || null,
             discordGuildName: task.discordGuildName || null,
             telegramChatId: task.telegramChatId || null,
-            telegramChatName: task.telegramChatName || null
+            telegramChatName: task.telegramChatName || null,
+            inputType: task.inputType || (task.inputLabel ? "text" : "link"),
+            requiresApproval: task.requiresApproval !== false && !!(task.inputLabel || task.requiresApproval)
           };
         })
       : [];
@@ -626,7 +649,7 @@ exports.createQuest = async (req, res) => {
       
       // Referral config
       referralConfig: {
-        enabled: referralEnabled || false,
+        enabled: referralEnabled || questType === 'referral_boost',
         xpPerReferralJoin: xpPerReferralJoin || 0,
         xpPerReferralComplete: xpPerReferralComplete || 0
       },
@@ -640,9 +663,12 @@ exports.createQuest = async (req, res) => {
 
       // Competition config
       competitionConfig: {
-        enabled: competitionEnabled || false,
-        topWinnersCount: topWinnersCount || 10,
-        winnerBonusXP: winnerBonusXP || 0
+        enabled: competitionEnabled || questType === 'competition',
+        topWinnersCount: winnerCount,
+        winnerBonusXP: winnerBonusXP || 0,
+        firstPlacePercent: firstPlacePercent === undefined ? 50 : Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 0)),
+        secondPlacePercent: secondPlacePercent === undefined ? 30 : Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 0)),
+        rankPercentages: savedRankPercentages
       },
 
       createdBy: req.session.userId,
@@ -1158,6 +1184,9 @@ exports.updateQuestSettings = async (req, res) => {
       competitionEnabled,
       topWinnersCount,
       winnerBonusXP,
+      firstPlacePercent,
+      secondPlacePercent,
+      rankPercentages,
       // Dates and limits
       startDate,
       endDate,
@@ -1179,6 +1208,24 @@ exports.updateQuestSettings = async (req, res) => {
       });
     }
 
+    if ((questType || quest.questType) === 'referral_boost' && (Number(xpPerReferralJoin ?? quest.referralConfig?.xpPerReferralJoin) || 0) <= 0 && (Number(xpPerReferralComplete ?? quest.referralConfig?.xpPerReferralComplete) || 0) <= 0) {
+      return res.status(400).json({ success: false, message: 'Set XP for at least one referral milestone (joining or completing the quest) before saving a referral boost.' });
+    }
+
+    if ((questType || quest.questType) === 'competition' && !(Number(usdcReward ?? quest.usdcReward) > 0)) {
+      return res.status(400).json({ success: false, message: 'Enter the USDC prize pool before saving this competition.' });
+    }
+    if (rankPercentages !== undefined) {
+      const count = Math.max(1, Math.min(100, parseInt(topWinnersCount ?? quest.competitionConfig?.topWinnersCount, 10) || 1));
+      const values = Array.isArray(rankPercentages) ? rankPercentages.map(Number) : [];
+      if (values.length !== count || values.some(p => !Number.isFinite(p) || p < 0 || p > 100) || Math.abs(values.reduce((a, b) => a + b, 0) - 100) > 0.01) {
+        return res.status(400).json({ success: false, message: `Enter one percentage for each of the ${count} places. Percentages must total 100%.` });
+      }
+      if (!quest.competitionConfig) quest.competitionConfig = {};
+      quest.competitionConfig.rankPercentages = values;
+      quest.competitionConfig.topWinnersCount = count;
+    }
+
     // Update basic fields
     if (title !== undefined) quest.title = title;
     if (shortDescription !== undefined) quest.shortDescription = shortDescription;
@@ -1193,13 +1240,17 @@ exports.updateQuestSettings = async (req, res) => {
 
     // Update referral config
     if (referralEnabled !== undefined) quest.referralConfig.enabled = referralEnabled;
+    if ((questType || quest.questType) === 'referral_boost') quest.referralConfig.enabled = true;
     if (xpPerReferralJoin !== undefined) quest.referralConfig.xpPerReferralJoin = xpPerReferralJoin;
     if (xpPerReferralComplete !== undefined) quest.referralConfig.xpPerReferralComplete = xpPerReferralComplete;
 
     // Update competition config
     if (competitionEnabled !== undefined) quest.competitionConfig.enabled = competitionEnabled;
-    if (topWinnersCount !== undefined) quest.competitionConfig.topWinnersCount = topWinnersCount;
+    if ((questType || quest.questType) === 'competition') quest.competitionConfig.enabled = true;
+    if (topWinnersCount !== undefined) quest.competitionConfig.topWinnersCount = Math.max(1, Math.min(100, parseInt(topWinnersCount, 10) || 1));
     if (winnerBonusXP !== undefined) quest.competitionConfig.winnerBonusXP = winnerBonusXP;
+    if (firstPlacePercent !== undefined) quest.competitionConfig.firstPlacePercent = Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 0));
+    if (secondPlacePercent !== undefined) quest.competitionConfig.secondPlacePercent = Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 0));
 
     // Update dates
     if (startDate !== undefined) quest.startDate = startDate;
@@ -1215,30 +1266,38 @@ exports.updateQuestSettings = async (req, res) => {
     // Update tasks if provided
     if (tasks !== undefined && Array.isArray(tasks)) {
       // Reindex tasks with order
+      const previousTasks = quest.tasks;
       quest.tasks = tasks.map((task, index) => {
-        // Only use twitterFollowTarget if admin explicitly set it
-        let twitterFollowTarget = task.twitterFollowTarget || null;
-
-        return {
-          title: task.title,
-          description: task.description,
-          order: index + 1,
-          taskType: task.taskType || 'submission',
-          xpReward: task.xpReward || 0,
-          isDaily: task.isDaily || false,
-          buttonText: task.buttonText || null,
-          buttonLink: task.buttonLink || null,
-          inputLabel: task.inputLabel || null,
-          inputName: task.inputName || null,
-          twitterFollowTarget: twitterFollowTarget,
-          requirements: task.requirements || {},
-          validationUrl: task.validationUrl || null
-        };
+        const existing = task._id ? previousTasks.id(task._id) : null;
+        const value = existing ? existing.toObject() : {};
+        Object.keys(task).forEach(key => { if (task[key] !== undefined) value[key] = task[key]; });
+        value.title = task.title;
+        value.description = task.description;
+        value.order = index + 1;
+        value.taskType = task.taskType || value.taskType || 'submission';
+        value.xpReward = Number(task.xpReward ?? value.xpReward) || 0;
+        value.isDaily = task.isDaily ?? value.isDaily ?? false;
+        value.inputLabel = task.inputLabel ?? value.inputLabel ?? null;
+        value.inputName = task.inputName ?? value.inputName ?? null;
+        value.requiresApproval = task.requiresApproval ?? value.requiresApproval ?? false;
+        return value;
       });
     }
 
     quest.updatedAt = Date.now();
     await quest.save();
+
+    if (tasks !== undefined && Array.isArray(tasks)) {
+      const activeTaskIds = new Set(quest.tasks.map(task => task._id.toString()));
+      const progressRows = await UserQuestProgress.find({ questId }).select('_id taskProgress status').lean();
+      const totalTasks = quest.tasks.length;
+      await Promise.all(progressRows.map(row => {
+        const taskProgress = (row.taskProgress || []).filter(tp => activeTaskIds.has(tp.taskId.toString()));
+        const tasksCompleted = taskProgress.filter(tp => tp.isCompleted).length;
+        const status = row.status === 'abandoned' ? 'abandoned' : (totalTasks > 0 && tasksCompleted === totalTasks ? 'completed' : 'in_progress');
+        return UserQuestProgress.updateOne({ _id: row._id }, { $set: { taskProgress, totalTasks, tasksCompleted, progress: totalTasks ? Math.round(tasksCompleted / totalTasks * 100) : 0, status } });
+      }));
+    }
 
     res.status(200).json({
       success: true,
@@ -1688,7 +1747,7 @@ exports.getQuestWinners = async (req, res) => {
       currentBalance: entry.userId.usdcBalance,
       totalXp: entry.xpBreakdown.totalXp,
       completedAt: entry.completedAt,
-      suggestedReward: calculateReward(index + 1, count)
+      suggestedReward: calculateReward(index + 1, count, quest)
     }));
 
     res.status(200).json({
@@ -1710,23 +1769,22 @@ exports.getQuestWinners = async (req, res) => {
 };
 
 // Helper function to calculate suggested rewards
-function calculateReward(rank, totalWinners) {
-  if (totalWinners <= 10) {
-    const rewards = [100, 75, 50, 40, 30, 25, 20, 15, 10, 5];
-    return rewards[rank - 1] || 5;
-  } else if (totalWinners <= 50) {
-    if (rank === 1) return 100;
-    if (rank <= 3) return 50;
-    if (rank <= 10) return 25;
-    if (rank <= 25) return 10;
-    return 5;
-  } else {
-    if (rank === 1) return 200;
-    if (rank <= 5) return 100;
-    if (rank <= 20) return 50;
-    if (rank <= 50) return 20;
-    return 10;
+function calculateReward(rank, totalWinners, quest) {
+  const budget = Math.max(0, Number(quest?.usdcReward) || 0);
+  const configured = quest?.competitionConfig?.rankPercentages;
+  if (!budget || totalWinners < 1) return 0;
+  if (Array.isArray(configured) && configured.length && configured[rank - 1] !== undefined) {
+    return Math.round((budget * Number(configured[rank - 1]) / 100) * 100) / 100;
   }
+  const first = Math.min(100, Math.max(0, Number(quest?.competitionConfig?.firstPlacePercent ?? 50)));
+  const second = Math.min(100 - first, Math.max(0, Number(quest?.competitionConfig?.secondPlacePercent ?? 30)));
+  let percent;
+  if (totalWinners === 1) percent = 100;
+  else if (rank === 1) percent = first;
+  else if (rank === 2 && totalWinners === 2) percent = 100 - first;
+  else if (rank === 2) percent = second;
+  else percent = (100 - first - second) / (totalWinners - 2);
+  return Math.round((budget * percent / 100) * 100) / 100;
 }
 
 exports.getAllEvents = async (req, res) => {
@@ -3078,7 +3136,7 @@ exports.getQuestWinners = async (req, res) => {
       totalXp: entry.xpBreakdown.totalXp,
       completedAt: entry.completedAt,
       // Default reward amount (can be edited by admin)
-      suggestedReward: calculateReward(index + 1, count)
+      suggestedReward: calculateReward(index + 1, count, quest)
     }));
 
     res.status(200).json({
@@ -3100,24 +3158,22 @@ exports.getQuestWinners = async (req, res) => {
 };
 
 // Helper function to calculate suggested rewards
-function calculateReward(rank, totalWinners) {
-  // Example reward structure - customize as needed
-  if (totalWinners <= 10) {
-    const rewards = [100, 75, 50, 40, 30, 25, 20, 15, 10, 5];
-    return rewards[rank - 1] || 5;
-  } else if (totalWinners <= 50) {
-    if (rank === 1) return 100;
-    if (rank <= 3) return 50;
-    if (rank <= 10) return 25;
-    if (rank <= 25) return 10;
-    return 5;
-  } else {
-    if (rank === 1) return 200;
-    if (rank <= 5) return 100;
-    if (rank <= 20) return 50;
-    if (rank <= 50) return 20;
-    return 10;
+function calculateReward(rank, totalWinners, quest) {
+  const budget = Math.max(0, Number(quest?.usdcReward) || 0);
+  const configured = quest?.competitionConfig?.rankPercentages;
+  if (!budget || totalWinners < 1) return 0;
+  if (Array.isArray(configured) && configured.length && configured[rank - 1] !== undefined) {
+    return Math.round((budget * Number(configured[rank - 1]) / 100) * 100) / 100;
   }
+  const first = Math.min(100, Math.max(0, Number(quest?.competitionConfig?.firstPlacePercent ?? 50)));
+  const second = Math.min(100 - first, Math.max(0, Number(quest?.competitionConfig?.secondPlacePercent ?? 30)));
+  let percent;
+  if (totalWinners === 1) percent = 100;
+  else if (rank === 1) percent = first;
+  else if (rank === 2 && totalWinners === 2) percent = 100 - first;
+  else if (rank === 2) percent = second;
+  else percent = (100 - first - second) / (totalWinners - 2);
+  return Math.round((budget * percent / 100) * 100) / 100;
 }
 
 function openRewardDistributionFromLeaderboard() {

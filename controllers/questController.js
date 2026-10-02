@@ -635,6 +635,15 @@ exports.submitTask = async (req, res) => {
       }
     }
 
+    // A configured custom input (for example, an X username) is required proof.
+    if (task.inputName && !['poll', 'webhook', 'discord_join', 'telegram_join'].includes(task.taskType)) {
+      const answer = submissionData?.[task.inputName] ?? submissionText;
+      if (typeof answer !== 'string' || !answer.trim()) {
+        return res.status(400).json({ success: false, message: `${task.inputLabel || 'Please provide the requested proof'} is required.` });
+      }
+      submissionText = answer.trim();
+    }
+
     // ==================== SPECIAL TASK TYPE VERIFICATION ====================
     const { verifyTelegramMembership, verifyDiscordMembership, callWebhook } = require('../utils/socialVerification');
 

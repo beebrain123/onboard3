@@ -171,5 +171,6 @@ function deleteWallet(id) {
  .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message); });
 }
 </script>
+<%- include('../../partials/whatsapp-float') %>
 </body>
 </html>

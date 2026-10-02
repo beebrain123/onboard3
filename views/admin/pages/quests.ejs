@@ -390,6 +390,15 @@
  </div>
  </div>
 
+ <div id="cqReferralConfig" style="display:none;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:1rem;margin-bottom:.875rem">
+ <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fbbf24;margin-bottom:.75rem"><i class="fas fa-users"></i> Referral XP Bonuses</p>
+ <div class="a-form-row">
+ <div class="a-form-group" style="margin-bottom:0"><label>XP per referral who joins</label><input type="number" name="xpPerReferralJoin" class="a-input" value="0" min="0"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>XP per referral who completes</label><input type="number" name="xpPerReferralComplete" class="a-input" value="0" min="0"></div>
+ </div>
+ <input type="hidden" name="referralEnabled" id="cqReferralEnabled" value="false">
+ </div>
+
  <!-- Reward Distribution Plan -->
  <div style="background:rgba(94,194,19,.04);border:1px solid rgba(94,194,19,.15);border-radius:10px;padding:1rem;margin-bottom:.875rem">
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5a7a56;margin-bottom:.75rem">
@@ -433,13 +442,18 @@
  <div class="a-form-row">
  <div class="a-form-group" style="margin-bottom:0">
  <label>Top Winners Count</label>
- <input type="number" name="competitionTopWinners" class="a-input" value="10" min="1">
+ <input type="number" name="topWinnersCount" class="a-input" value="10" min="1">
  </div>
  <div class="a-form-group" style="margin-bottom:0">
  <label>Winner Bonus XP</label>
- <input type="number" name="competitionWinnerXP" class="a-input" value="0" min="0">
+ <input type="number" name="winnerBonusXP" class="a-input" value="0" min="0">
  </div>
  </div>
+ <div class="a-form-row" style="margin-top:.75rem">
+ <div class="a-form-group" style="margin-bottom:0"><label>1st place share (%)</label><input type="number" name="firstPlacePercent" class="a-input" value="50" min="0" max="100" step="0.1"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>2nd place share (%)</label><input type="number" name="secondPlacePercent" class="a-input" value="30" min="0" max="100" step="0.1"></div>
+ </div>
+ <small style="display:block;color:var(--text-3);margin-top:.5rem">3rd place and remaining winners split the percentage left after 1st and 2nd equally.</small>
  </div>
 
  <div class="a-form-row">
@@ -565,6 +579,17 @@
  <div id="qmSettingsFlash" class="qm-flash"></div>
  <p style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#5a7a56;margin-bottom:1rem">Quest Settings</p>
 
+ <div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:1rem;margin-bottom:.875rem">
+ <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5a7a56;margin-bottom:.75rem"><i class="fas fa-pen"></i> Edit Quest Details</p>
+ <div class="a-form-group"><label>Title</label><input type="text" id="sq_title" class="a-input"></div>
+ <div class="a-form-group"><label>Short Description</label><input type="text" id="sq_shortDescription" class="a-input"></div>
+ <div class="a-form-group"><label>Description</label><textarea id="sq_description" class="a-input" rows="3"></textarea></div>
+ <div class="a-form-row">
+ <div class="a-form-group"><label>Category</label><select id="sq_category" class="a-input"><option value="learning">Learning</option><option value="social">Social</option><option value="development">Development</option><option value="community">Community</option><option value="special">Special</option><option value="nft">NFT</option></select></div>
+ <div class="a-form-group"><label>Difficulty</label><select id="sq_difficulty" class="a-input"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option><option value="expert">Expert</option></select></div>
+ </div>
+ </div>
+
  <!-- XP & Budget -->
  <div style="background:rgba(94,194,19,.04);border:1px solid rgba(94,194,19,.15);border-radius:10px;padding:1rem;margin-bottom:.875rem">
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5a7a56;margin-bottom:.75rem"><i class="fas fa-star" style="color:var(--green)"></i> XP &amp; Budget</p>
@@ -578,6 +603,29 @@
  <input type="number" id="sq_usdc" class="a-input" value="0" min="0" step="0.01" style="font-size:.82rem;padding:.5rem .75rem" oninput="calcSqPlan()">
  </div>
  </div>
+ </div>
+
+ <!-- Referral XP settings -->
+ <div style="background:rgba(251,191,36,.04);border:1px solid rgba(251,191,36,.16);border-radius:10px;padding:1rem;margin-bottom:.875rem">
+ <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fbbf24;margin-bottom:.75rem"><i class="fas fa-users"></i> Referral XP Bonuses</p>
+ <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem"><input type="checkbox" id="sq_referralEnabled"> Enable referral bonuses</label>
+ <div class="a-form-row">
+ <div class="a-form-group"><label>XP per referral join</label><input type="number" id="sq_referralJoin" class="a-input" min="0" value="0"></div>
+ <div class="a-form-group"><label>XP per referral completion</label><input type="number" id="sq_referralComplete" class="a-input" min="0" value="0"></div>
+ </div>
+ </div>
+
+ <div style="background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.16);border-radius:10px;padding:1rem;margin-bottom:.875rem">
+ <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#c084fc;margin-bottom:.75rem"><i class="fas fa-medal"></i> Competition Reward Split</p>
+ <div class="a-form-row">
+ <div class="a-form-group"><label>Top winners</label><input type="number" id="sq_topWinners" class="a-input" min="1" value="10"></div>
+ <div class="a-form-group"><label>Winner bonus XP</label><input type="number" id="sq_winnerBonusXP" class="a-input" min="0" value="0"></div>
+ </div>
+ <div class="a-form-row">
+ <div class="a-form-group"><label>1st place (%)</label><input type="number" id="sq_firstPlacePercent" class="a-input" min="0" max="100" step="0.1" value="50"></div>
+ <div class="a-form-group"><label>2nd place (%)</label><input type="number" id="sq_secondPlacePercent" class="a-input" min="0" max="100" step="0.1" value="30"></div>
+ </div>
+ <small style="color:var(--text-3)">The remaining budget is split equally between 3rd place and the other winners.</small>
  </div>
 
  <!-- Reward Plan -->
@@ -674,6 +722,8 @@ function onCqTypeChange() {
  var t = document.getElementById('cqType').value;
  document.getElementById('cqFcfsConfig').style.display = t==='fcfs' ? 'block' : 'none';
  document.getElementById('cqCompConfig').style.display = t==='competition' ? 'block' : 'none';
+ document.getElementById('cqReferralConfig').style.display = t==='referral_boost' ? 'block' : 'none';
+ document.getElementById('cqReferralEnabled').value = t==='referral_boost' ? 'true' : 'false';
 }
 
 function onTaskTypeChange() {
@@ -718,10 +768,22 @@ function openQuestManager(id, title, type) {
  if (!d.success) return;
  var q = d.quest;
  document.getElementById('sq_baseXp').value = q.baseXpReward || 0;
+ document.getElementById('sq_title').value = q.title || '';
+ document.getElementById('sq_shortDescription').value = q.shortDescription || '';
+ document.getElementById('sq_description').value = q.description || '';
+ document.getElementById('sq_category').value = q.category || 'learning';
+ document.getElementById('sq_difficulty').value = q.difficulty || 'beginner';
  document.getElementById('sq_usdc').value = q.usdcReward || 0;
  document.getElementById('sq_perPerson').value = (q.rewardPlan && q.rewardPlan.rewardPerPerson) || 0;
  document.getElementById('sq_maxWinners').value = (q.rewardPlan && q.rewardPlan.maxWinners) || 0;
  document.getElementById('sq_maxParticipants').value = q.maxParticipants || 0;
+ document.getElementById('sq_referralEnabled').checked = !!(q.referralConfig && q.referralConfig.enabled);
+ document.getElementById('sq_referralJoin').value = (q.referralConfig && q.referralConfig.xpPerReferralJoin) || 0;
+ document.getElementById('sq_referralComplete').value = (q.referralConfig && q.referralConfig.xpPerReferralComplete) || 0;
+ document.getElementById('sq_topWinners').value = (q.competitionConfig && q.competitionConfig.topWinnersCount) || 10;
+ document.getElementById('sq_winnerBonusXP').value = (q.competitionConfig && q.competitionConfig.winnerBonusXP) || 0;
+ document.getElementById('sq_firstPlacePercent').value = q.competitionConfig?.firstPlacePercent ?? 50;
+ document.getElementById('sq_secondPlacePercent').value = q.competitionConfig?.secondPlacePercent ?? 30;
  calcSqPlan();
  }).catch(function(){});
  /* reset to tasks tab */
@@ -1014,11 +1076,23 @@ function saveQuestSettings() {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({
+ title: document.getElementById('sq_title').value.trim(),
+ shortDescription: document.getElementById('sq_shortDescription').value.trim(),
+ description: document.getElementById('sq_description').value.trim(),
+ category: document.getElementById('sq_category').value,
+ difficulty: document.getElementById('sq_difficulty').value,
  baseXpReward: parseInt(document.getElementById('sq_baseXp').value) || 0,
  usdcReward: parseFloat(document.getElementById('sq_usdc').value) || 0,
  rewardPerPerson: parseFloat(document.getElementById('sq_perPerson').value) || 0,
  maxWinners: parseInt(document.getElementById('sq_maxWinners').value) || 0,
- maxParticipants: parseInt(document.getElementById('sq_maxParticipants').value) || 0
+ maxParticipants: parseInt(document.getElementById('sq_maxParticipants').value) || 0,
+ referralEnabled: document.getElementById('sq_referralEnabled').checked,
+ xpPerReferralJoin: parseInt(document.getElementById('sq_referralJoin').value) || 0,
+ xpPerReferralComplete: parseInt(document.getElementById('sq_referralComplete').value) || 0,
+ topWinnersCount: parseInt(document.getElementById('sq_topWinners').value) || 10,
+ winnerBonusXP: parseInt(document.getElementById('sq_winnerBonusXP').value) || 0,
+ firstPlacePercent: parseFloat(document.getElementById('sq_firstPlacePercent').value) || 0,
+ secondPlacePercent: parseFloat(document.getElementById('sq_secondPlacePercent').value) || 0
  })
  }).then(function(r){ return r.json(); })
  .then(function(d) {
@@ -1046,5 +1120,6 @@ function escHtml(s) {
  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
+<%- include('../../partials/whatsapp-float') %>
 </body>
 </html>

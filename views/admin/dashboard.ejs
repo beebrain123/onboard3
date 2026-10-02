@@ -1191,7 +1191,7 @@
  
  <div class="form-group">
  <label>USDC Reward</label>
- <input type="number" id="questUSDC" min="0" step="0.01" value="0">
+ <input type="number" id="questUSDC" min="0" step="0.01" value="0" oninput="updateRankPrizePreview('create')">
  <small style="color: #888; display: block; margin-top: 0.3rem;">Optional USDC reward</small>
  </div>
  </div>
@@ -1200,6 +1200,7 @@
  <!-- Referral Settings -->
  <div id="referralSettings" style="display: none; border-bottom: 2px solid rgba(94,194,19,0.2); padding-bottom: 1.5rem; margin-bottom: 1.5rem; background: rgba(94,194,19,0.05); padding: 1.5rem; border-radius: 12px;">
  <h4 style="color:var(--green); margin-bottom: 1rem;"><i class="fas fa-users"></i> Referral Bonus Settings</h4>
+ <p style="color:#aaa;font-size:.85rem">Set XP for a referral joining and/or completing this quest. At least one amount must be greater than zero before you can publish.</p>
  
  <div class="form-group">
  <label style="display: flex; align-items: center; gap: 0.5rem;">
@@ -1240,7 +1241,7 @@
  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
  <div class="form-group">
  <label>Top Winners Count</label>
- <input type="number" id="topWinnersCount" min="1" value="10">
+ <input type="number" id="topWinnersCount" min="1" max="100" value="10" oninput="renderRankPrizeFields('create')">
  <small style="color: #888; display: block; margin-top: 0.3rem;">How many top performers get prizes (e.g., top 10)</small>
  </div>
  
@@ -1250,6 +1251,9 @@
  <small style="color: #888; display: block; margin-top: 0.3rem;">Extra XP for winners</small>
  </div>
  </div>
+ <div id="createRankPrizeFields" style="margin-top:.75rem"></div>
+ <div id="createRankPrizeSummary" style="color:#aaa;font-size:.8rem;margin-top:.5rem"></div>
+ <div style="display:none"><input id="firstPlacePercent" value="50"><input id="secondPlacePercent" value="30"></div>
  </div>
  </div>
 
@@ -1357,11 +1361,25 @@
 
  <div class="form-group">
  <label>USDC Reward</label>
- <input type="number" id="editQuestUSDC" min="0" step="0.01" value="0">
+ <input type="number" id="editQuestUSDC" min="0" step="0.01" value="0" oninput="updateRankPrizePreview('edit')">
  </div>
  </div>
  </div>
 
+ <!-- Quest referral and ranked reward settings -->
+ <div style="border-bottom:2px solid rgba(94,194,19,.2);padding-bottom:1.5rem;margin-bottom:1.5rem">
+ <h4 style="color:var(--green);margin-bottom:1rem"><i class="fas fa-users"></i> Referral XP &amp; Competition Rewards</h4>
+ <label style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem"><input type="checkbox" id="editReferralEnabled"> Enable referral bonuses</label>
+ <p style="color:#aaa;font-size:.85rem">Referral boosts require XP for joining and/or completing the quest. At least one amount must be greater than zero.</p>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+ <div class="form-group"><label>XP per referral who joins</label><input type="number" id="editXpPerReferralJoin" min="0" value="0"></div>
+ <div class="form-group"><label>XP per referral who completes</label><input type="number" id="editXpPerReferralComplete" min="0" value="0"></div>
+ </div>
+ <div class="form-group"><label>Number of Prize Places</label><input type="number" id="editTopWinnersCount" min="1" max="100" value="10" oninput="renderRankPrizeFields('edit')"></div>
+ <div id="editRankPrizeFields" style="margin-top:.75rem"></div>
+ <div id="editRankPrizeSummary" style="color:#aaa;font-size:.8rem;margin-top:.5rem"></div>
+ <div style="display:none"><input id="editFirstPlacePercent" value="50"><input id="editSecondPlacePercent" value="30"></div>
+ </div>
  <!-- Quest Tasks -->
  <div style="border-bottom: 2px solid rgba(94,194,19,0.2); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
  <h4 style="color:var(--green); margin-bottom: 1rem;"><i class="fas fa-tasks"></i> Quest Tasks</h4>
@@ -3349,6 +3367,7 @@ function openCreateQuestModal() {
  document.getElementById('tasksList').innerHTML = '';
  taskCounter = 0;
  addTask();
+ renderRankPrizeFields('create');
  openModal('createQuestModal');
 }
 async function createQuest(e) {
@@ -3383,6 +3402,8 @@ async function createQuest(e) {
  if (buttonLink) taskObj.buttonLink = buttonLink;
  if (inputLabel) taskObj.inputLabel = inputLabel;
  if (inputName) taskObj.inputName = inputName;
+ if (task.querySelector('.task-requiresApproval')?.checked) taskObj.requiresApproval = true;
+ if (inputLabel && !inputName) taskObj.inputName = inputLabel.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'proof';
 
  // New task type-specific fields
  if (taskObj.taskType === 'poll') {
@@ -3444,6 +3465,9 @@ async function createQuest(e) {
  competitionEnabled: document.getElementById('competitionEnabled')?.checked || false,
  topWinnersCount: parseInt(document.getElementById('topWinnersCount')?.value) || 10,
  winnerBonusXP: parseInt(document.getElementById('winnerBonusXP')?.value) || 0,
+ firstPlacePercent: (Number.isFinite(parseFloat(document.getElementById('firstPlacePercent')?.value)) ? parseFloat(document.getElementById('firstPlacePercent').value) : 50),
+ secondPlacePercent: (Number.isFinite(parseFloat(document.getElementById('secondPlacePercent')?.value)) ? parseFloat(document.getElementById('secondPlacePercent').value) : 30),
+ rankPercentages: getRankPercentages('create'),
 
  tasks: tasks
  };
@@ -3509,6 +3533,49 @@ function toggleReferralFields() {
 function toggleCompetitionFields() {
  const enabled = document.getElementById('competitionEnabled').checked;
  document.getElementById('competitionFields').style.display = enabled ? 'block' : 'none';
+}
+
+function rankDefaultPercentages(count, first, second) {
+ count = Math.max(1, Math.min(100, parseInt(count, 10) || 1));
+ first = Number.isFinite(Number(first)) ? Math.max(0, Math.min(100, Number(first))) : 50;
+ second = Number.isFinite(Number(second)) ? Math.max(0, Math.min(100 - first, Number(second))) : 30;
+ if (count === 1) return [100];
+ if (count === 2) return [first, 100 - first];
+ const share = Math.floor(((100 - first - second) / (count - 2)) * 100) / 100;
+ const rest = Array(count - 2).fill(share);
+ rest[rest.length - 1] = Math.round((100 - first - second - share * (count - 3)) * 100) / 100;
+ return [first, second].concat(rest);
+}
+function renderRankPrizeFields(mode, saved) {
+ const countInput = document.getElementById(mode === 'edit' ? 'editTopWinnersCount' : 'topWinnersCount');
+ const target = document.getElementById(mode === 'edit' ? 'editRankPrizeFields' : 'createRankPrizeFields');
+ if (!countInput || !target) return;
+ const count = Math.max(1, Math.min(100, parseInt(countInput.value, 10) || 1)); countInput.value = count;
+ const first = document.getElementById(mode === 'edit' ? 'editFirstPlacePercent' : 'firstPlacePercent')?.value;
+ const second = document.getElementById(mode === 'edit' ? 'editSecondPlacePercent' : 'secondPlacePercent')?.value;
+ const defaults = rankDefaultPercentages(count, first, second);
+ const current = Array.from(target.querySelectorAll('.rank-prize-percent')).map(input => parseFloat(input.value));
+ const values = Array.isArray(saved) && saved.length ? saved : current.length ? current.concat(defaults.slice(current.length)).slice(0, count) : defaults;
+ target.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.65rem">' + Array.from({length:count}, function(_, i) {
+  const value = Number.isFinite(Number(values[i])) ? Number(values[i]) : defaults[i];
+  return '<label style="font-size:.8rem;color:#bbb">Place ' + (i + 1) + ' (%)<input class="rank-prize-percent" type="number" min="0" max="100" step="0.01" value="' + value.toFixed(2) + '" oninput="updateRankPrizePreview(\'' + mode + '\')" style="display:block;width:100%;margin-top:.3rem"></label>';
+ }).join('') + '</div>';
+ updateRankPrizePreview(mode);
+}
+function getRankPercentages(mode) {
+ const target = document.getElementById(mode === 'edit' ? 'editRankPrizeFields' : 'createRankPrizeFields');
+ return target ? Array.from(target.querySelectorAll('.rank-prize-percent')).map(input => parseFloat(input.value) || 0) : [];
+}
+function updateRankPrizePreview(mode) {
+ const pool = parseFloat(document.getElementById(mode === 'edit' ? 'editQuestUSDC' : 'questUSDC')?.value) || 0;
+ const values = getRankPercentages(mode); const total = values.reduce((sum, pct) => sum + pct, 0);
+ const summary = document.getElementById(mode === 'edit' ? 'editRankPrizeSummary' : 'createRankPrizeSummary');
+ const first = document.getElementById(mode === 'edit' ? 'editFirstPlacePercent' : 'firstPlacePercent');
+ const second = document.getElementById(mode === 'edit' ? 'editSecondPlacePercent' : 'secondPlacePercent');
+ if (first && values.length) first.value = values[0]; if (second && values.length > 1) second.value = values[1];
+ if (summary) {
+  summary.innerHTML = values.map((pct, i) => 'Place ' + (i + 1) + ': $' + (pool * pct / 100).toFixed(2)).join(' ? ') + '<br><span style="color:' + (Math.abs(total - 100) < .011 ? '#5EC213' : '#f87171') + '">Total: ' + total.toFixed(2) + '% (' + (Math.abs(total - 100) < .011 ? 'ready' : 'must equal 100%') + ')</span>';
+ }
 }
 
 function addTask() {
@@ -3589,6 +3656,8 @@ function addTask() {
  <label>Input Name (Technical ID)</label>
  <input type="text" class="task-inputName" placeholder="e.g., twitterUsername">
  </div>
+ <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem"><input type="checkbox" class="task-requiresApproval"> Require admin review before awarding task XP</label>
+ <small style="color:#888">Use this for reported usernames, links or screenshots that should be checked.</small>
  </div>
 
  <!-- Auto Twitter/X Follow Verification Info -->
@@ -3769,6 +3838,9 @@ async function createNewQuest(e) {
  competitionEnabled: document.getElementById('competitionEnabled')?.checked || false,
  topWinnersCount: parseInt(document.getElementById('topWinnersCount')?.value) || 10,
  winnerBonusXP: parseInt(document.getElementById('winnerBonusXP')?.value) || 0,
+ firstPlacePercent: (Number.isFinite(parseFloat(document.getElementById('firstPlacePercent')?.value)) ? parseFloat(document.getElementById('firstPlacePercent').value) : 50),
+ secondPlacePercent: (Number.isFinite(parseFloat(document.getElementById('secondPlacePercent')?.value)) ? parseFloat(document.getElementById('secondPlacePercent').value) : 30),
+ rankPercentages: getRankPercentages('create'),
 
  tasks: tasks
  };
@@ -3867,6 +3939,13 @@ async function openEditQuestModal(questId) {
  document.getElementById('editQuestType').value = quest.questType || 'standard';
  document.getElementById('editBaseXpReward').value = quest.baseXpReward || 0;
  document.getElementById('editQuestUSDC').value = quest.usdcReward || 0;
+ document.getElementById('editReferralEnabled').checked = !!quest.referralConfig?.enabled;
+ document.getElementById('editXpPerReferralJoin').value = quest.referralConfig?.xpPerReferralJoin || 0;
+ document.getElementById('editXpPerReferralComplete').value = quest.referralConfig?.xpPerReferralComplete || 0;
+ document.getElementById('editFirstPlacePercent').value = quest.competitionConfig?.firstPlacePercent ?? 50;
+ document.getElementById('editSecondPlacePercent').value = quest.competitionConfig?.secondPlacePercent ?? 30;
+ document.getElementById('editTopWinnersCount').value = quest.competitionConfig?.topWinnersCount || 10;
+ renderRankPrizeFields('edit', quest.competitionConfig?.rankPercentages);
 
  // Clear and populate tasks
  const tasksList = document.getElementById('editTasksList');
@@ -3893,6 +3972,7 @@ function addEditTask(existingTask = null) {
  const taskItem = document.createElement('div');
  taskItem.className = 'edit-task-item';
  taskItem.id = `edit-task-${editTaskCounter}`;
+ taskItem.dataset.taskId = existingTask?._id || '';
  taskItem.innerHTML = `
  <h4 style="color:var(--green); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(94,194,19,0.2); display: flex; justify-content: space-between; align-items: center;">
  <span><i class="fas fa-tasks"></i> Task ${editTaskCounter}</span>
@@ -3960,6 +4040,7 @@ function addEditTask(existingTask = null) {
  <label>Input Name (Technical ID)</label>
  <input type="text" class="edit-task-inputName" placeholder="e.g., twitterUsername" value="${existingTask?.inputName || ''}">
  </div>
+ <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem"><input type="checkbox" class="edit-task-requiresApproval" ${existingTask?.requiresApproval || existingTask?.inputLabel ? 'checked' : ''}> Require admin review before awarding task XP</label>
  </div>
  `;
  tasksList.appendChild(taskItem);
@@ -4005,14 +4086,12 @@ async function updateQuest(e) {
  if (buttonLink) taskObj.buttonLink = buttonLink;
  if (inputLabel) taskObj.inputLabel = inputLabel;
  if (inputName) taskObj.inputName = inputName;
+ else if (inputLabel) taskObj.inputName = inputLabel.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'proof';
+ taskObj.requiresApproval = !!task.querySelector('.edit-task-requiresApproval')?.checked;
+ if (task.dataset.taskId) taskObj._id = task.dataset.taskId;
 
  tasks.push(taskObj);
  });
-
- if (tasks.length === 0) {
- alert('Please add at least one task');
- return;
- }
 
  const formData = {
  title: document.getElementById('editQuestTitle').value,
@@ -4023,6 +4102,13 @@ async function updateQuest(e) {
  questType: document.getElementById('editQuestType').value,
  baseXpReward: parseInt(document.getElementById('editBaseXpReward').value) || 0,
  usdcReward: parseFloat(document.getElementById('editQuestUSDC').value) || 0,
+ referralEnabled: document.getElementById('editReferralEnabled').checked,
+ xpPerReferralJoin: parseInt(document.getElementById('editXpPerReferralJoin').value) || 0,
+ xpPerReferralComplete: parseInt(document.getElementById('editXpPerReferralComplete').value) || 0,
+ firstPlacePercent: parseFloat(document.getElementById('editFirstPlacePercent').value) || 0,
+ secondPlacePercent: parseFloat(document.getElementById('editSecondPlacePercent').value) || 0,
+ topWinnersCount: parseInt(document.getElementById('editTopWinnersCount').value, 10) || 1,
+ rankPercentages: getRankPercentages('edit'),
  tasks: tasks
  };
 
@@ -5980,5 +6066,6 @@ async function unbanUser(userId, username) {
  </div>
 </div>
 
+<%- include('../partials/whatsapp-float') %>
 </body>
 </html>

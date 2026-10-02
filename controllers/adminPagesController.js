@@ -82,7 +82,7 @@ exports.usersPage = async (req, res) => {
 exports.questsPage = async (req, res) => {
     try {
         const quests = await Quest.find()
-            .select('title category difficulty isActive baseXpReward usdcReward rewardPlan questType totalParticipants totalCompletions endDate createdAt image tasks approvalStatus approvalNote sponsoredBy')
+        .select('title shortDescription description category difficulty isActive baseXpReward usdcReward rewardPlan questType referralConfig competitionConfig totalParticipants totalCompletions startDate endDate createdAt image tasks approvalStatus approvalNote sponsoredBy')
             .populate('sponsoredBy', 'name username')
             .sort({ createdAt:-1 }).lean();
         res.render('admin/pages/quests', { admin: req.user, user: req.user, quests });
@@ -361,7 +361,7 @@ exports.unbanUser = async (req, res) => {
 // ── POST /admin/quests/create ────────────────────────────────────────────────
 exports.createQuestPage = async (req, res) => {
     try {
-        const { title, shortDescription, description, category, difficulty, questType, baseXpReward, usdcReward, rewardPerPerson, maxWinners, startDate, endDate, image } = req.body;
+        const { title, shortDescription, description, category, difficulty, questType, baseXpReward, usdcReward, rewardPerPerson, maxWinners, startDate, endDate, image, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent } = req.body;
         const { broadcast } = require('../utils/notificationService');
         const quest = new Quest({
             title, shortDescription, description,
@@ -373,6 +373,18 @@ exports.createQuestPage = async (req, res) => {
             rewardPlan: {
                 rewardPerPerson: +rewardPerPerson || 0,
                 maxWinners:      +maxWinners      || 0
+            },
+            referralConfig: {
+                enabled: questType === 'referral_boost' || referralEnabled === 'true',
+                xpPerReferralJoin: Math.max(0, parseInt(xpPerReferralJoin, 10) || 0),
+                xpPerReferralComplete: Math.max(0, parseInt(xpPerReferralComplete, 10) || 0)
+            },
+            competitionConfig: {
+                enabled: questType === 'competition',
+                topWinnersCount: Math.max(1, parseInt(topWinnersCount, 10) || 10),
+                winnerBonusXP: Math.max(0, parseInt(winnerBonusXP, 10) || 0),
+                firstPlacePercent: Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 50)),
+                secondPlacePercent: Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 30))
             },
             startDate: startDate || null,
             endDate:   endDate   || null,
@@ -418,7 +430,7 @@ exports.addQuestTask = async (req, res) => {
 exports.getQuestEntries = async (req, res) => {
     try {
         const quest = await Quest.findById(req.params.id)
-            .select('questType tasks dailyTasks title rewardPlan baseXpReward usdcReward');
+            .select('questType tasks dailyTasks title shortDescription description category difficulty startDate endDate rewardPlan baseXpReward usdcReward referralConfig competitionConfig');
         if (!quest) return res.json({ success: false, message: 'Quest not found' });
 
         const entries = await UserQuestProgress.find({ questId: req.params.id })
@@ -552,12 +564,27 @@ exports.updateQuestSettings = async (req, res) => {
     try {
         const quest = await Quest.findById(req.params.id);
         if (!quest) return res.json({ success: false, message: 'Quest not found' });
-        const { usdcReward, rewardPerPerson, maxWinners, maxParticipants, baseXpReward } = req.body;
+        const { title, shortDescription, description, category, difficulty, questType, usdcReward, rewardPerPerson, maxWinners, maxParticipants, baseXpReward, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent } = req.body;
+        if (title !== undefined) quest.title = String(title).trim();
+        if (shortDescription !== undefined) quest.shortDescription = String(shortDescription).trim();
+        if (description !== undefined) quest.description = String(description).trim();
+        if (category !== undefined) quest.category = category;
+        if (difficulty !== undefined) quest.difficulty = difficulty;
+        if (questType !== undefined) quest.questType = questType;
         if (usdcReward       !== undefined) quest.usdcReward                  = Math.max(0, parseFloat(usdcReward) || 0);
         if (rewardPerPerson  !== undefined) quest.rewardPlan.rewardPerPerson  = Math.max(0, parseFloat(rewardPerPerson) || 0);
         if (maxWinners       !== undefined) quest.rewardPlan.maxWinners       = Math.max(0, parseInt(maxWinners) || 0);
         if (maxParticipants  !== undefined) quest.maxParticipants             = parseInt(maxParticipants) > 0 ? parseInt(maxParticipants) : null;
         if (baseXpReward     !== undefined) quest.baseXpReward                = Math.max(0, parseInt(baseXpReward) || 0);
+        if (!quest.referralConfig) quest.referralConfig = {};
+        if (referralEnabled !== undefined) quest.referralConfig.enabled = referralEnabled === true || referralEnabled === 'true';
+        if (xpPerReferralJoin !== undefined) quest.referralConfig.xpPerReferralJoin = Math.max(0, parseInt(xpPerReferralJoin, 10) || 0);
+        if (xpPerReferralComplete !== undefined) quest.referralConfig.xpPerReferralComplete = Math.max(0, parseInt(xpPerReferralComplete, 10) || 0);
+        if (!quest.competitionConfig) quest.competitionConfig = {};
+        if (topWinnersCount !== undefined) quest.competitionConfig.topWinnersCount = Math.max(1, parseInt(topWinnersCount, 10) || 1);
+        if (winnerBonusXP !== undefined) quest.competitionConfig.winnerBonusXP = Math.max(0, parseInt(winnerBonusXP, 10) || 0);
+        if (firstPlacePercent !== undefined) quest.competitionConfig.firstPlacePercent = Math.min(100, Math.max(0, parseFloat(firstPlacePercent) || 0));
+        if (secondPlacePercent !== undefined) quest.competitionConfig.secondPlacePercent = Math.min(100, Math.max(0, parseFloat(secondPlacePercent) || 0));
         await quest.save();
         res.json({ success: true, quest: { usdcReward: quest.usdcReward, rewardPlan: quest.rewardPlan, maxParticipants: quest.maxParticipants, baseXpReward: quest.baseXpReward } });
     } catch (err) {
