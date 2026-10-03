@@ -318,9 +318,9 @@ async function getFeeKey() {
   return Buffer.from(child.privateKey).toString('hex') + '01';
 }
 
-// Submit a bounty entry on-chain to ZeroAuthDAO from the user's custodial wallet
-// Fee is sponsored by ONBOARD3's fee wallet — user wallet needs zero STX balance
-// ZAD's Server Action broadcasts the tx AND creates the DB record (so it appears on their site)
+// Submit a bounty entry on-chain to ZeroAuthDAO from the user's custodial wallet.
+// ZeroAuthDAO sponsors and broadcasts the transaction; ONBOARD3 only signs the
+// sender authorization and passes the serialized sponsored transaction to ZAD.
 async function submitBountyOnChain(userId, bountyId, summary, submissionUrl, creationTxId) {
   const User = require('../models/User');
   const user = await User.findById(userId).select('stacksWalletIndex stacksAddress username profilePicture').lean();
@@ -328,7 +328,6 @@ async function submitBountyOnChain(userId, bountyId, summary, submissionUrl, cre
 
   const parent  = await getParent();
   const userKey = derivePrivKey(parent, user.stacksWalletIndex);
-  const feeKey  = await getFeeKey();
   const network = STACKS_MAINNET;
   const contractName = await resolveBountyContractName(bountyId, creationTxId);
   console.log('[ZAD] Submission contract selected:', ZAD_CONTRACT_ADDRESS + '.' + contractName);
@@ -345,16 +344,9 @@ async function submitBountyOnChain(userId, bountyId, summary, submissionUrl, cre
     sponsored:       true,
   });
 
-  // Fee wallet signs the sponsored portion
-  const sponsored = await sponsorTransaction({
-    transaction:       tx,
-    sponsorPrivateKey: feeKey,
-    fee:               SPONSOR_FEE,
-    network,
-  });
-
-  // serialize() already returns a hex string — do NOT wrap in Buffer.from() or it double-encodes
-  const raw = sponsored.serialize();
+  // Keep the sponsor authorization unsigned so ZeroAuthDAO can add its own
+  // sponsor signature and cover the network fee in its submission action.
+  const raw = tx.serialize();
   const signedTxHex = typeof raw === 'string' ? raw : Buffer.from(raw).toString('hex');
 
   // Call ZAD's Server Action (broadcasts + creates DB record so it appears on their platform)
