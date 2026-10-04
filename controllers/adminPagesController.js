@@ -364,7 +364,7 @@ exports.createQuestPage = async (req, res) => {
         const { title, shortDescription, description, category, difficulty, questType, baseXpReward, usdcReward, rewardPerPerson, maxWinners, startDate, endDate, image, referralEnabled, xpPerReferralJoin, xpPerReferralComplete, topWinnersCount, winnerBonusXP, firstPlacePercent, secondPlacePercent, rankPercentages } = req.body;
         const rankCount = Math.max(1, Math.min(100, parseInt(topWinnersCount, 10) || 10));
         const rankShares = (Array.isArray(rankPercentages) ? rankPercentages : rankPercentages === undefined ? [] : [rankPercentages]).map(Number);
-        if (questType === 'competition' && (rankShares.length !== rankCount || rankShares.some(p => !Number.isFinite(p) || p < 0 || p > 100) || Math.abs(rankShares.reduce((a, b) => a + b, 0) - 100) > 0.01)) {
+        if (rankShares.length !== rankCount || rankShares.some(p => !Number.isFinite(p) || p < 0 || p > 100) || Math.abs(rankShares.reduce((a, b) => a + b, 0) - 100) > 0.01) {
             return res.redirect('/admin/quests?error=rank-split');
         }
         const { broadcast } = require('../utils/notificationService');

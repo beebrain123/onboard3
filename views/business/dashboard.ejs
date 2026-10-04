@@ -773,8 +773,8 @@
  </div>
 
  <!-- Competition Config -->
- <div id="competitionConfig" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;margin-bottom:.75rem">
- <div style="font-size:.8rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem"><i class="fas fa-ranking-star"></i> Competition Settings</div>
+ <div id="competitionConfig" style="display:block;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;margin-bottom:.75rem">
+ <div style="font-size:.8rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem"><i class="fas fa-ranking-star"></i> Ranked Winner Settings</div>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
  <div class="p-form-group" style="margin:0">
  <label style="font-size:.8rem">Number of prize places</label>
@@ -833,7 +833,7 @@
  <!-- Reward Plan -->
  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;margin-bottom:.75rem" id="rewardPlanSection">
  <div style="font-size:.8rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem"><i class="fas fa-chart-pie" style="color:var(--green)"></i> Reward Distribution</div>
- <div id="bizEqualRewardFields" style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem">
+ <div id="bizEqualRewardFields" style="display:none;grid-template-columns:1fr 1fr;gap:.875rem">
  <div class="p-form-group" style="margin:0">
  <label style="font-size:.8rem">USDC Per Person</label>
  <input class="p-input" type="number" name="rewardPerPerson" id="bizRewardPerPerson" min="0" step="0.01" placeholder="e.g. 5.00" oninput="calcBizRewardPlan()" style="font-size:.8125rem">
@@ -970,7 +970,7 @@
  <!-- Disburse -->
  <div id="disburseSection" style="display:none;background:linear-gradient(135deg,#0d1f14,#0a1a0f);border:1px solid rgba(16,185,129,.3);border-radius:var(--radius-sm);padding:1rem">
  <div style="font-weight:700;font-size:.875rem;margin-bottom:.5rem;color:var(--green)"><i class="fas fa-money-bill-wave"></i> Distribute USDC Rewards</div>
- <p style="font-size:.8rem;color:var(--text-2);margin-bottom:.75rem">Quest has ended. Distribute the reward pool to all completers equally (competition: top N only).</p>
+ <p style="font-size:.8rem;color:var(--text-2);margin-bottom:.75rem">Quest has ended. Distribute the reward pool to completers using the configured place percentages.</p>
  <button class="p-btn p-btn-bd p-btn-sm" onclick="disburseRewards()"><i class="fas fa-paper-plane"></i> Disburse Now</button>
  <div id="disburseMsg" style="display:none;margin-top:.625rem;font-size:.8125rem;padding:.5rem .75rem;border-radius:var(--radius-sm)"></div>
  </div>
@@ -1426,19 +1426,20 @@ function updateBountyPreview() {
 
 // ── Reward plan calculator ────────────────────────────────────────────────────
 function getBizPool(){var text=document.getElementById('qPoolAmt')?.textContent||'0';return parseFloat(text.replace('$',''))||0;}
-function renderBizRankFields(){var countInput=document.getElementById('bizTopWinners'),holder=document.getElementById('bizRankFields');if(!countInput||!holder)return;var count=Math.max(1,Math.min(100,parseInt(countInput.value,10)||1));countInput.value=count;var old=Array.from(holder.querySelectorAll('.biz-rank-percent')).map(function(i){return parseFloat(i.value)||0;});var vals=old.length===count?old:Array(count).fill(Math.floor(10000/count)/100);vals[count-1]=Number((100-vals.slice(0,count-1).reduce((a,b)=>a+b,0)).toFixed(2));holder.innerHTML='';for(var i=0;i<count;i++){var label=document.createElement('label');label.style.cssText='font-size:.8rem;color:var(--text-2)';label.textContent='Place '+(i+1)+' (%)';var input=document.createElement('input');input.type='number';input.min='0';input.max='100';input.step='.01';input.value=Number(vals[i]).toFixed(2);input.className='p-input biz-rank-percent';input.style.cssText='display:block;width:100%;margin-top:.3rem';input.oninput=updateBizRankPreview;label.appendChild(input);holder.appendChild(label);}updateBizRankPreview();}
+function renderBizRankFields(){var countInput=document.getElementById('bizTopWinners'),holder=document.getElementById('bizRankFields');if(!countInput||!holder)return;var count=Math.max(1,Math.min(100,parseInt(countInput.value,10)||1));countInput.value=count;var old=Array.from(holder.querySelectorAll('.biz-rank-percent')).map(function(i){return parseFloat(i.value)||0;});var vals=old.length===count?old:(count===1?[100]:count===2?[50,50]:[50,10].concat(Array(count-2).fill(Math.floor(4000/(count-2))/100)));if(old.length!==count&&count>2) vals[count-1]=Number((100-vals.slice(0,count-1).reduce((a,b)=>a+b,0)).toFixed(2));holder.innerHTML='';for(var i=0;i<count;i++){var label=document.createElement('label');label.style.cssText='font-size:.8rem;color:var(--text-2)';label.textContent='Place '+(i+1)+' (%)';var input=document.createElement('input');input.type='number';input.min='0';input.max='100';input.step='.01';input.value=Number(vals[i]).toFixed(2);input.className='p-input biz-rank-percent';input.style.cssText='display:block;width:100%;margin-top:.3rem';input.oninput=updateBizRankPreview;label.appendChild(input);holder.appendChild(label);}updateBizRankPreview();}
 function updateBizRankPreview(){var pool=getBizPool(),holder=document.getElementById('bizRankFields'),summary=document.getElementById('bizRankSummary'),hidden=document.getElementById('bizRankPercentages');if(!holder||!summary||!hidden)return;var vals=Array.from(holder.querySelectorAll('.biz-rank-percent')).map(function(i){return parseFloat(i.value)||0;}),total=vals.reduce((a,b)=>a+b,0);hidden.value=JSON.stringify(vals);summary.style.display='';summary.innerHTML=vals.map(function(p,i){return 'Place '+(i+1)+': <strong>$'+(pool*p/100).toFixed(2)+'</strong> ('+p.toFixed(2)+'%)';}).join(' &nbsp;|&nbsp; ')+'<br><span style="color:'+(Math.abs(total-100)<.011?'var(--green)':'var(--red)')+'">Total '+total.toFixed(2)+'%'+(Math.abs(total-100)<.011?'':' - must equal 100%')+'</span>'; }
 function calcBizRewardPlan(){var perPerson=parseFloat(document.getElementById('bizRewardPerPerson').value)||0,preview=document.getElementById('bizRewardPreview'),pool=getBizPool();if(pool<=0||perPerson<=0){preview.style.display='none';return;}var winners=Math.floor(pool/perPerson);document.getElementById('bizMaxWinners').value=winners;preview.style.display='';preview.innerHTML='<strong style="color:var(--green)">$'+pool.toFixed(2)+'</strong> pool / <strong style="color:var(--green)">$'+perPerson.toFixed(2)+'</strong> per person - <strong style="color:var(--green)">'+winners+' recipients</strong>'; }
 
 function onQuestTypeChange(type) {
  document.getElementById('fcfsConfig').style.display = type === 'fcfs' ? '' : 'none';
- document.getElementById('competitionConfig').style.display = type === 'competition' ? '' : 'none';
- document.getElementById('bizRankFields').style.display = type === 'competition' ? 'grid' : 'none';
- document.getElementById('bizRankSummary').style.display = type === 'competition' ? '' : 'none';
- document.getElementById('bizEqualRewardFields').style.display = type === 'competition' ? 'none' : 'grid';
- if(type === 'competition') renderBizRankFields();
+ document.getElementById('competitionConfig').style.display = '';
+ document.getElementById('bizRankFields').style.display = 'grid';
+ document.getElementById('bizRankSummary').style.display = '';
+ document.getElementById('bizEqualRewardFields').style.display = 'none';
+ renderBizRankFields();
  document.getElementById('referralConfig').style.display = type === 'referral_boost' ? '' : 'none';
 }
+renderBizRankFields();
 function toggleBatchFields() {
  var chk = document.getElementById('batchEnabledChk');
  var fields = document.getElementById('batchFields');

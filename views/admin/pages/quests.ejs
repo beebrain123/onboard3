@@ -184,7 +184,7 @@
  <h1><i class="fas fa-trophy"></i> Quest Management</h1>
  <p><%= quests.length %> quests — <%= quests.filter(q=>q.isActive).length %> active</p>
  </div>
- <button onclick="openModal('createQuestModal')" class="a-btn a-btn-primary">
+ <button onclick="openModal('createQuestModal'); onCqTypeChange()" class="a-btn a-btn-primary">
  <i class="fas fa-plus"></i> Create Quest
  </button>
  </div>
@@ -415,7 +415,7 @@
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5a7a56;margin-bottom:.75rem">
  <i class="fas fa-chart-pie" style="color:var(--green)"></i> Reward Distribution Plan
  </p>
- <div class="a-form-row" id="cqEqualRewardFields">
+ <div class="a-form-row" id="cqEqualRewardFields" style="display:none">
  <div class="a-form-group" style="margin-bottom:0">
  <label>USDC per person</label>
  <input type="number" name="rewardPerPerson" id="cqPerPerson" class="a-input" value="0" min="0" step="0.01" oninput="calcRewardPlan()">
@@ -447,9 +447,9 @@
  </div>
 
  <!-- Competition config -->
- <div id="cqCompConfig" style="display:none;background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.15);border-radius:10px;padding:1rem;margin-bottom:.875rem">
+ <div id="cqCompConfig" style="display:block;background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.15);border-radius:10px;padding:1rem;margin-bottom:.875rem">
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a855f7;margin-bottom:.75rem">
- <i class="fas fa-medal"></i> Competition Reward Distribution
+ <i class="fas fa-medal"></i> Ranked Reward Distribution
  </p>
  <div class="a-form-row">
  <div class="a-form-group" style="margin-bottom:0">
@@ -611,7 +611,7 @@
  <!-- Reward Plan -->
  <div style="background:rgba(94,194,19,.04);border:1px solid rgba(94,194,19,.15);border-radius:10px;padding:1rem;margin-bottom:.875rem">
  <p style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5a7a56;margin-bottom:.75rem"><i class="fas fa-chart-pie" style="color:var(--green)"></i> Reward Distribution</p>
- <div class="aqf-grid" id="sqEqualRewardFields">
+ <div class="aqf-grid" id="sqEqualRewardFields" style="display:none">
  <div class="a-form-group" style="margin-bottom:0">
  <label style="font-size:.75rem">USDC per person</label>
  <input type="number" id="sq_perPerson" class="a-input" value="0" min="0" step="0.01" style="font-size:.82rem;padding:.5rem .75rem" oninput="calcSqPlan()">
@@ -688,27 +688,19 @@ document.addEventListener('click', function(e) {
 
 /* ── Reward plan calculator ── */
 function calcRewardPlan() {
- var budget = parseFloat(document.getElementById('cqBudget').value) || 0;
- var perPerson = parseFloat(document.getElementById('cqPerPerson').value) || 0;
- var preview = document.getElementById('rewardPreview');
  updateQuestRankAmounts('create');
- if (document.getElementById('cqType').value === 'competition') { preview.style.display='none'; return; }
- if (budget <= 0 || perPerson <= 0) { preview.style.display='none'; return; }
- var winners = Math.floor(budget / perPerson);
- document.getElementById('cqMaxWinners').value = winners;
- preview.style.display = 'block';
- preview.innerHTML = '<strong>$' + budget.toFixed(2) + '</strong> total &nbsp;→&nbsp; <strong>$' + perPerson.toFixed(2) + '</strong> each &nbsp;→&nbsp; <strong>' + winners + ' recipients</strong>';
+ document.getElementById('rewardPreview').style.display = 'none';
 }
 function onCqTypeChange() {
  var t = document.getElementById('cqType').value;
  var isCompetition = t === 'competition';
  document.getElementById('cqFcfsConfig').style.display = t === 'fcfs' ? 'block' : 'none';
- document.getElementById('cqCompConfig').style.display = isCompetition ? 'block' : 'none';
+ document.getElementById('cqCompConfig').style.display = 'block';
  document.getElementById('cqReferralConfig').style.display = t === 'referral_boost' ? 'block' : 'none';
  document.getElementById('cqReferralEnabled').value = t === 'referral_boost' ? 'true' : 'false';
- document.getElementById('cqEqualRewardFields').style.display = isCompetition ? 'none' : '';
- document.getElementById('cqCompetitionPlanNote').style.display = isCompetition ? 'block' : 'none';
- if (isCompetition) renderQuestRankShares('create');
+ document.getElementById('cqEqualRewardFields').style.display = 'none';
+ document.getElementById('cqCompetitionPlanNote').style.display = 'block';
+ renderQuestRankShares('create');
  calcRewardPlan();
 }
 function renderQuestRankShares(mode, values) {
@@ -719,9 +711,13 @@ function renderQuestRankShares(mode, values) {
  countInput.value = count;
  var current = values || getQuestRankShares(mode);
  if (current.length !== count) {
-  var each = Math.floor(10000 / count) / 100;
-  current = Array(count).fill(each);
-  current[count - 1] = Number((100 - each * (count - 1)).toFixed(2));
+  if (count === 1) current = [100];
+  else if (count === 2) current = [50, 50];
+  else {
+   var remainingShare = Math.floor(4000 / (count - 2)) / 100;
+   current = [50, 10].concat(Array(count - 2).fill(remainingShare));
+   current[count - 1] = Number((100 - current.slice(0, count - 1).reduce(function(sum, value) { return sum + value; }, 0)).toFixed(2));
+  }
  }
  holder.innerHTML = '';
  for (var i = 0; i < count; i++) {
@@ -834,9 +830,9 @@ function openQuestManager(id, title, type) {
  if (!d.success) return;
  var q = d.quest;
  var isCompetition = q.questType === 'competition';
- document.getElementById('sqCompetitionSplit').style.display = isCompetition ? 'block' : 'none';
- document.getElementById('sqEqualRewardFields').style.display = isCompetition ? 'none' : '';
- document.getElementById('sqCompetitionPlanNote').style.display = isCompetition ? 'block' : 'none';
+ document.getElementById('sqCompetitionSplit').style.display = 'block';
+ document.getElementById('sqEqualRewardFields').style.display = 'none';
+ document.getElementById('sqCompetitionPlanNote').style.display = 'block';
  _qmQuestType = q.questType || _qmQuestType;
  document.getElementById('sq_baseXp').value = q.baseXpReward || 0;
  document.getElementById('sq_title').value = q.title || '';
@@ -1187,7 +1183,7 @@ function calcSqPlan() {
  var perPerson = parseFloat(document.getElementById('sq_perPerson').value) || 0;
  var preview = document.getElementById('sqRewardPreview');
  updateQuestRankAmounts('settings');
- if (_qmQuestType === 'competition') { preview.style.display = 'none'; return; }
+ preview.style.display = 'none'; return;
  if (budget <= 0 || perPerson <= 0) { preview.style.display = 'none'; return; }
  var winners = Math.floor(budget / perPerson);
  document.getElementById('sq_maxWinners').value = winners;

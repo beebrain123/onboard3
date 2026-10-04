@@ -231,7 +231,7 @@ router.post('/create-quest', businessAuth, async (req, res) => {
     let rankShares = [];
     if (typeof rankPercentages === 'string') { try { rankShares = JSON.parse(rankPercentages); } catch (_) { rankShares = []; } }
     else if (Array.isArray(rankPercentages)) rankShares = rankPercentages.map(Number);
-    if (questType === 'competition') {
+    {
       const count = Math.max(1, Math.min(100, parseInt(competitionTopWinners, 10) || 10));
       if (rankShares.length !== count || rankShares.some(p => !Number.isFinite(Number(p)) || Number(p) < 0 || Number(p) > 100) || Math.abs(rankShares.reduce((sum, p) => sum + Number(p), 0) - 100) > 0.01) {
         return res.redirect('/business/dashboard?tab=quests&error=invalid_reward_split');
@@ -278,7 +278,7 @@ router.post('/create-quest', businessAuth, async (req, res) => {
         enabled:       questType === 'competition',
         topWinnersCount: parseInt(competitionTopWinners) || 10,
         winnerBonusXP:   parseInt(competitionWinnerXP)   || 0,
-        rankPercentages: questType === 'competition' ? rankShares : []
+        rankPercentages: rankShares
       },
       referralConfig: {
         enabled:              referralEnabled === 'on' || referralEnabled === 'true',
@@ -564,7 +564,7 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
       .sort({ 'xpBreakdown.totalXp': -1, completedAt: 1 })
       .populate('userId', 'username');
 
-    if (quest.questType === 'competition' && quest.competitionConfig?.enabled) {
+    if (Array.isArray(quest.competitionConfig?.rankPercentages) && quest.competitionConfig.rankPercentages.length) {
       const topN = quest.competitionConfig.topWinnersCount || 10;
       winnersQuery = winnersQuery.limit(topN);
     }
@@ -574,7 +574,7 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
       return res.json({ success: false, message: 'No completions to distribute rewards to' });
     }
 
-    const configuredShares = quest.questType === 'competition' ? quest.competitionConfig?.rankPercentages : null;
+    const configuredShares = quest.competitionConfig?.rankPercentages;
     const useRankShares = Array.isArray(configuredShares) && configuredShares.length >= winners.length && Math.abs(configuredShares.reduce((sum, p) => sum + Number(p || 0), 0) - 100) <= 0.01;
     const payoutAmounts = winners.map((_, index) => useRankShares ? Math.round(pool * Number(configuredShares[index]) / 100 * 100) / 100 : Math.round(pool / winners.length * 100) / 100);
     const perUser = payoutAmounts[0] || 0;
