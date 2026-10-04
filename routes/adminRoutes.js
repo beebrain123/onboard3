@@ -163,6 +163,8 @@ router.post('/quests/create',                         isAdminPage, pages.createQ
 router.post('/quests/:id/toggle',                     isAdminPage, pages.toggleQuestPage);
 router.post('/quests/:id/delete',                     isAdminPage, pages.deleteQuestPage);
 router.post('/quests/:id/add-task',                   isAdminPage, pages.addQuestTask);
+router.post('/quests/:id/tasks/:taskId/update',     isAdminPage, pages.updateQuestTask);
+router.post('/quests/:id/tasks/:taskId/delete',     isAdminPage, pages.deleteQuestTask);
 router.get( '/quests/:id/entries',                          isAdminPage, pages.getQuestEntries);
 router.post('/quests/:id/entries/:progressId/remove',       isAdminPage, pages.removeQuestEntry);
 router.post('/quests/:id/users/:userId/bonus-xp',           isAdminPage, pages.awardBonusXp);

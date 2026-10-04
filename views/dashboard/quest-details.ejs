@@ -874,6 +874,7 @@
  data-task-title="<%= task.title.replace(/"/g, '&quot;') %>"
  data-input-label="<%= (task.inputLabel || '').replace(/"/g, '&quot;') %>"
  data-input-name="<%= (task.inputName || '').replace(/"/g, '&quot;') %>"
+ data-input-type="<%= task.inputType || 'text' %>"
  data-has-button="false"
  data-twitter-target=""
  data-task-type="<%= task.taskType || 'submission' %>"
@@ -910,6 +911,7 @@
  data-task-title="<%= task.title.replace(/"/g, '&quot;') %>"
  data-input-label="<%= (task.inputLabel || '').replace(/"/g, '&quot;') %>"
  data-input-name="<%= (task.inputName || '').replace(/"/g, '&quot;') %>"
+ data-input-type="<%= task.inputType || 'text' %>"
  data-has-button="<%= !!task.buttonLink %>"
  data-twitter-target="<%= (task.twitterFollowTarget || '').replace(/"/g, '&quot;') %>"
  data-task-type="<%= task.taskType || 'submission' %>"
@@ -1174,6 +1176,9 @@
  }
 
  /* ── Called by task card Submit buttons ── */
+ function escapeTaskHtml(value) {
+ return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+ }
  function handleSubmitClick(btn) {
  playSound('click');
  var taskId = btn.getAttribute('data-task-id');
@@ -1181,6 +1186,7 @@
  var taskTitle = btn.getAttribute('data-task-title');
  var inputLabel = btn.getAttribute('data-input-label');
  var inputName = btn.getAttribute('data-input-name');
+ var inputType = btn.getAttribute('data-input-type') || 'text';
  var hasButton = btn.getAttribute('data-has-button') === 'true';
  var twitterTarget = btn.getAttribute('data-twitter-target');
  var taskType = btn.getAttribute('data-task-type') || 'default';
@@ -1191,12 +1197,12 @@
  var telegramChatId = btn.getAttribute('data-telegram-chat-id') || '';
  var telegramChatName = btn.getAttribute('data-telegram-chat-name') || '';
 
- openTaskModal(taskId, questId, taskTitle, inputLabel, inputName, hasButton,
+ openTaskModal(taskId, questId, taskTitle, inputLabel, inputName, inputType, hasButton,
  twitterTarget, taskType, pollOptions,
  discordGuildId, discordGuildName, telegramChatId, telegramChatName);
  }
 
- function openTaskModal(taskId, questId, taskTitle, inputLabel, inputName, hasButton,
+ function openTaskModal(taskId, questId, taskTitle, inputLabel, inputName, inputType, hasButton,
  twitterFollowTarget, taskType, pollOptions,
  discordGuildId, discordGuildName, telegramChatId, telegramChatName) {
  currentTaskId = taskId;
@@ -1273,14 +1279,17 @@
  '</div>';
 
  } else if (inputLabel && inputName) {
- if (titleEl) titleEl.innerHTML = '<i class="fas fa-paper-plane"></i> Submit: ' + taskTitle;
+ var safeLabel = escapeTaskHtml(inputLabel);
+ var safeName = escapeTaskHtml(inputName);
+ var fieldType = inputType === 'link' ? 'url' : 'text';
+ var fieldPlaceholder = inputType === 'link' ? 'https://...' : 'Enter ' + inputLabel.toLowerCase();
+ if (titleEl) titleEl.innerHTML = '<i class="fas fa-paper-plane"></i> Submit: ' + escapeTaskHtml(taskTitle);
  if (subEl) subEl.textContent = inputLabel;
  container.innerHTML = reminderHtml +
- '<label style="display:block;font-size:.8125rem;font-weight:700;color:var(--text-2);margin-bottom:.4rem"><i class="fas fa-edit" style="color:var(--green)"></i> ' + inputLabel + '</label>' +
- '<input type="text" id="qs_customInput" data-field-name="' + inputName.replace(/"/g,'&quot;') + '" placeholder="Enter ' + inputLabel.toLowerCase() + '" autocomplete="off" autocorrect="off" autocapitalize="off" enterkeyhint="go" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:var(--text);font-family:Outfit,sans-serif;font-size:.9rem;padding:.75rem 1rem;outline:none" onfocus="this.style.borderColor=\'rgba(94,194,19,.5)\';scrollModalToBottom()" onblur="this.style.borderColor=\'rgba(255,255,255,.12)\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitCurrentTask();}">' +
- '<small style="color:var(--text-3);font-size:.75rem;margin-top:.4rem;display:block">Type your ' + inputLabel.toLowerCase() + ' and tap <strong style="color:var(--green)">Submit Task</strong> (or press Enter)</small>';
- setTimeout(function() { var el = document.getElementById('qs_customInput'); if (el) { el.focus(); el.select(); } }, 120);
-
+ '<label style="display:block;font-size:.8125rem;font-weight:700;color:var(--text-2);margin-bottom:.4rem"><i class="fas fa-edit" style="color:var(--green)"></i> ' + safeLabel + '</label>' +
+ '<input type="' + fieldType + '" id="qs_customInput" data-field-name="' + safeName + '" placeholder="' + escapeTaskHtml(fieldPlaceholder) + '" autocomplete="off" autocorrect="off" autocapitalize="off" enterkeyhint="go" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:var(--text);font-family:Outfit,sans-serif;font-size:.9rem;padding:.75rem 1rem;outline:none" onfocus="this.style.borderColor=\'rgba(94,194,19,.5)\';scrollModalToBottom()" onblur="this.style.borderColor=\'rgba(255,255,255,.12)\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitCurrentTask();}">' +
+ '<small style="color:var(--text-3);font-size:.75rem;margin-top:.4rem;display:block">Enter your response and tap <strong style="color:var(--green)">Submit Task</strong> (or press Enter).</small>';
+ setTimeout(function() { var el = document.getElementById('qs_customInput'); if (el) el.focus(); }, 120);
  } else if (taskType === 'submission') {
  if (titleEl) titleEl.innerHTML = '<i class="fas fa-link"></i> Submit: ' + taskTitle;
  if (subEl) subEl.textContent = 'Paste the link to your work below';
@@ -1290,7 +1299,7 @@
  'Paste the URL of your submission below. Admin will review and approve it.' +
  '</div>' +
  '<label style="display:block;font-size:.8125rem;font-weight:700;color:var(--text-2);margin-bottom:.4rem"><i class="fas fa-link" style="color:var(--green)"></i> Submission URL</label>' +
- '<input type="text" inputmode="url" id="qs_urlInput" placeholder="https://..." autocomplete="off" autocorrect="off" enterkeyhint="go" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(94,194,19,.25);border-radius:10px;color:var(--text);font-family:Outfit,sans-serif;font-size:.9rem;padding:.75rem 1rem;outline:none" onfocus="this.style.borderColor=\'rgba(94,194,19,.6)\';scrollModalToBottom()" onblur="this.style.borderColor=\'rgba(94,194,19,.25)\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitCurrentTask();}">' +
+ '<input type="url" inputmode="url" id="qs_urlInput" placeholder="https://..." autocomplete="off" autocorrect="off" enterkeyhint="go" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(94,194,19,.25);border-radius:10px;color:var(--text);font-family:Outfit,sans-serif;font-size:.9rem;padding:.75rem 1rem;outline:none" onfocus="this.style.borderColor=\'rgba(94,194,19,.6)\';scrollModalToBottom()" onblur="this.style.borderColor=\'rgba(94,194,19,.25)\'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitCurrentTask();}">' +
  '<small style="color:var(--text-3);font-size:.75rem;margin-top:.4rem;display:block"><i class="fas fa-clock" style="color:#f59e0b"></i> Admin will review before XP is credited</small>';
  setTimeout(function() { var el = document.getElementById('qs_urlInput'); if (el) el.focus(); }, 120);
 
@@ -1438,6 +1447,13 @@
  }
  /* else: poll/discord/telegram/webhook/twitter — no extra input needed */
 
+ var urlCandidate = customEl && customEl.type === 'url' ? customEl.value.trim() : (urlEl ? urlEl.value.trim() : '');
+ if (urlCandidate) {
+  try {
+   var parsedCandidate = new URL(urlCandidate);
+   if (!['http:', 'https:'].includes(parsedCandidate.protocol)) throw new Error('protocol');
+  } catch (e) { showSubmitError('Enter a complete URL starting with https:// or http://.'); return; }
+ }
  /* Lock UI */
  playSound('submit');
  var submitBtn = document.getElementById('taskSubmitBtn');

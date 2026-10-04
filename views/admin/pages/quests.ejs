@@ -82,7 +82,18 @@
  .task-info p { font-size:.83rem;font-weight:700;color:#e8f5e2;
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
  .task-info span { font-size:.7rem;color:#5a7a56; }
- .task-xp { font-size:.75rem;font-weight:800;color:#5ec213; }
+ .task-xp { font-size:.75rem;font-weight:800;color:#5ec213;white-space:nowrap; }
+ .task-row--managed { align-items:flex-start;flex-wrap:wrap; }
+ .task-row--managed .task-info { min-width:180px; }
+ .task-row--managed .task-info p { white-space:normal;overflow:visible;text-overflow:clip;margin-bottom:.2rem; }
+ .task-detail-chips { display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem; }
+ .task-detail-chip { display:inline-flex;align-items:center;padding:.14rem .45rem;border-radius:999px;background:rgba(94,194,19,.08);color:#8aaf85!important;font-size:.65rem!important;border:1px solid rgba(94,194,19,.12); }
+ .task-detail-chip--review { background:rgba(245,158,11,.08);color:#fbbf24!important;border-color:rgba(245,158,11,.2); }
+ .task-row-actions { display:flex;gap:.35rem;margin-left:auto; }
+ .task-row-actions button { padding:.4rem .55rem;font-size:.72rem; }
+ .nt-detail-grid { grid-template-columns:1fr 1fr; }
+ .nt-input-grid { grid-template-columns:1fr 1fr 1fr; }
+ @media(max-width:620px){ .nt-detail-grid,.nt-input-grid { grid-template-columns:1fr; } .task-row-actions { width:100%;margin-left:34px; } }
 
  /* Add task form */
  .add-task-form {
@@ -505,57 +516,31 @@
  <div style="color:#5a7a56;font-size:.85rem;padding:.75rem 0">Loading tasks…</div>
  </div>
 
- <!-- Add Task Form -->
+ <!-- Add / Edit Task Form -->
  <div class="add-task-form" id="addTaskForm">
- <h4><i class="fas fa-plus" style="color:var(--green)"></i> Add Task</h4>
+ <h4 id="nt_formTitle"><i class="fas fa-plus" style="color:var(--green)"></i> Add Task</h4>
  <div class="aqf-grid">
- <div class="a-form-group" style="margin-bottom:0">
- <label style="font-size:.75rem">Task Title *</label>
- <input type="text" id="nt_title" class="a-input" placeholder="e.g. Follow us on X" style="font-size:.82rem;padding:.5rem .75rem">
+ <div class="a-form-group" style="margin-bottom:0"><label>Task title *</label><input type="text" id="nt_title" class="a-input" placeholder="e.g. Follow us on X" maxlength="120"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>What should participants do?</label><select id="nt_type" class="a-input" onchange="onTaskTypeChange()"><option value="external">Open a link and confirm</option><option value="submission">Submit a URL</option><option value="social">Social task with a custom input</option><option value="verification">Task with a custom answer</option><option value="image_upload">Upload an image as proof</option><option value="discord_join">Verify Discord membership</option><option value="telegram_join">Verify Telegram membership</option></select></div>
  </div>
- <div class="a-form-group" style="margin-bottom:0">
- <label style="font-size:.75rem">Task Type</label>
- <select id="nt_type" class="a-input" style="font-size:.82rem;padding:.5rem .75rem" onchange="onTaskTypeChange()">
- <option value="external">External Link (click to confirm)</option>
- <option value="submission">Link Submission (URL input)</option>
- <option value="image_upload">Image Upload (proof screenshot)</option>
- <option value="social">Social Media</option>
- <option value="verification">Verification</option>
- <option value="discord_join">Discord Join</option>
- <option value="telegram_join">Telegram Join</option>
- </select>
+ <div class="a-form-group" style="margin:.75rem 0"><label>Instructions for participants</label><textarea id="nt_desc" class="a-input" rows="3" maxlength="1000" placeholder="Explain exactly what to do and what proof to provide."></textarea></div>
+ <div class="aqf-grid nt-detail-grid">
+ <div class="a-form-group" style="margin-bottom:0"><label>XP reward</label><input type="number" id="nt_xp" class="a-input" value="0" min="0" step="1"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>Unlock on day</label><input type="number" id="nt_day" class="a-input" value="0" min="0" step="1"><small style="color:var(--text-3)">0 unlocks immediately.</small></div>
  </div>
+ <div id="ntLinkConfig" class="aqf-grid nt-detail-grid" style="margin-top:.75rem">
+ <div class="a-form-group" style="margin-bottom:0"><label>Button link</label><input type="url" id="nt_link" class="a-input" placeholder="https://example.com/task"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>Button text</label><input type="text" id="nt_buttonText" class="a-input" maxlength="40" placeholder="e.g. Follow on X"></div>
  </div>
- <div class="aqf-grid" style="grid-template-columns:1fr 1fr 1fr">
- <div class="a-form-group" style="margin-bottom:0">
- <label style="font-size:.75rem">XP Reward</label>
- <input type="number" id="nt_xp" class="a-input" value="0" min="0" style="font-size:.82rem;padding:.5rem .75rem">
- </div>
- <div class="a-form-group" style="margin-bottom:0">
- <label style="font-size:.75rem">Unlock on Day <span style="color:#5a7a56;font-weight:400">(0 = immediately)</span></label>
- <input type="number" id="nt_day" class="a-input" value="0" min="0" style="font-size:.82rem;padding:.5rem .75rem" placeholder="0">
- </div>
- <div class="a-form-group" style="margin-bottom:0">
- <label style="font-size:.75rem">Button Link (optional)</label>
- <input type="url" id="nt_link" class="a-input" placeholder="https://..." style="font-size:.82rem;padding:.5rem .75rem">
- </div>
- </div>
- <div class="a-form-group" style="margin-bottom:.75rem;margin-top:.625rem">
- <label style="font-size:.75rem">Description (optional)</label>
- <input type="text" id="nt_desc" class="a-input" placeholder="Short task instructions" style="font-size:.82rem;padding:.5rem .75rem">
- </div>
- <div id="approvalToggleRow" style="display:flex;align-items:center;gap:.625rem;margin-bottom:.75rem;padding:.5rem .75rem;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);border-radius:8px">
- <input type="checkbox" id="nt_approval" style="width:16px;height:16px;accent-color:#5ec213;cursor:pointer">
- <label for="nt_approval" style="font-size:.78rem;color:#e8f5e2;cursor:pointer;font-weight:600;margin:0">
- Require manual approval <span style="color:#5a7a56;font-weight:400">(admin reviews submission before XP is granted)</span>
- </label>
- <span id="approvalFcfsNote" style="display:none;font-size:.7rem;color:#60a5fa;margin-left:auto">Auto (FCFS)</span>
- </div>
- <button onclick="submitAddTask()" class="a-btn a-btn-primary a-btn-sm" id="addTaskBtn">
- <i class="fas fa-plus"></i> Add Task
- </button>
- </div>
- </div>
+ <div id="ntInputConfig" class="aqf-grid nt-input-grid" style="margin-top:.75rem">
+ <div class="a-form-group" style="margin-bottom:0"><label>Input prompt</label><input type="text" id="nt_inputLabel" class="a-input" maxlength="80" placeholder="e.g. Enter your X username"></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>Input key <span style="color:var(--text-3);font-weight:400">(optional)</span></label><input type="text" id="nt_inputName" class="a-input" maxlength="40" placeholder="e.g. x_username"><small style="color:var(--text-3)">Leave blank to generate it from the prompt.</small></div>
+ <div class="a-form-group" style="margin-bottom:0"><label>Answer format</label><select id="nt_inputType" class="a-input"><option value="text">Text</option><option value="link">URL / link</option><option value="none">No text input</option></select></div>
+</div>
+ <small id="ntTypeHelp" style="display:block;color:var(--text-2);font-size:.75rem;margin:.55rem 0 .75rem"></small>
+ <div id="approvalToggleRow" style="display:flex;align-items:center;gap:.625rem;margin-bottom:.75rem;padding:.7rem .85rem;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);border-radius:10px"><input type="checkbox" id="nt_approval" style="width:16px;height:16px;accent-color:#5ec213;cursor:pointer"><label for="nt_approval" style="font-size:.78rem;color:#e8f5e2;cursor:pointer;font-weight:600;margin:0">Require manual review before granting XP</label><span id="approvalFcfsNote" style="display:none;font-size:.7rem;color:#60a5fa;margin-left:auto">Auto approval (FCFS)</span></div>
+ <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"><button onclick="submitAddTask()" class="a-btn a-btn-primary a-btn-sm" id="addTaskBtn"><i class="fas fa-plus"></i> Add Task</button><button type="button" onclick="cancelEditQuestTask()" class="a-btn a-btn-secondary a-btn-sm" id="cancelTaskEditBtn" style="display:none">Cancel edit</button><span style="margin-left:auto;color:var(--text-3);font-size:.72rem">You can edit or remove tasks before launching.</span></div>
+ </div></div>
 
  <!-- ── ENTRIES panel ── -->
  <div class="qm-body" id="qm-entries" style="display:none">
@@ -789,19 +774,39 @@ function updateQuestRankShareTotal(mode) {
 }
 function onTaskTypeChange() {
  var type = document.getElementById('nt_type').value;
- var approvalRow = document.getElementById('approvalToggleRow');
- if (!approvalRow) return;
+ var linkTypes = ['external', 'social', 'submission', 'verification', 'discord_join', 'telegram_join'];
+ var inputTypes = ['social', 'submission', 'verification'];
+ document.getElementById('ntLinkConfig').style.display = linkTypes.indexOf(type) !== -1 ? 'grid' : 'none';
+ document.getElementById('ntInputConfig').style.display = inputTypes.indexOf(type) !== -1 ? 'grid' : 'none';
+ var help = document.getElementById('ntTypeHelp');
+ var guidance = {
+  external: 'Add a button link for the action. Participants click it, then confirm completion.',
+  submission: 'Participants submit a URL. Add a custom prompt only if you need a specific link or detail.',
+  social: 'Add the action link and ask for the participant’s username or profile link.',
+  verification: 'Use the optional input prompt to collect the exact answer or proof you need.',
+  image_upload: 'Participants upload a screenshot or image. Manual review is recommended.',
+  discord_join: 'Participants connect Discord and verify membership in your configured server.',
+  telegram_join: 'Participants verify Telegram membership in the configured group.'
+ };
+ help.textContent = guidance[type] || '';
  var needsReview = type === 'submission' || type === 'image_upload';
+ if (type === 'submission' && !_qmEditingTaskId) document.getElementById('nt_inputType').value = 'link';
  document.getElementById('nt_approval').checked = needsReview && _qmQuestType !== 'fcfs';
+ var fcfs = _qmQuestType === 'fcfs';
+ document.getElementById('nt_approval').disabled = fcfs;
+ document.getElementById('approvalToggleRow').style.opacity = fcfs ? '.55' : '1';
+ document.getElementById('approvalFcfsNote').style.display = fcfs ? 'inline' : 'none';
 }
-
 /* ── Quest Manager Panel ── */
 var _qmQuestId = null;
 var _qmQuestType = null;
+var _qmEditingTaskId = null;
 
 function openQuestManager(id, title, type) {
  _qmQuestId = id;
  _qmQuestType = type;
+ resetQuestTaskForm();
+ onTaskTypeChange();
  document.getElementById('qmTitle').textContent = title;
  var metaEl = document.getElementById('qmMeta');
  var typeColors = { standard:'#5ec213', fcfs:'#60a5fa', competition:'#c084fc', referral_boost:'#fbbf24' };
@@ -875,70 +880,124 @@ function qmTab(tab) {
 /* ── Load tasks ── */
 function loadQmTasks() {
  var list = document.getElementById('qmTaskList');
- list.innerHTML = '<div style="color:#5a7a56;font-size:.85rem;padding:.5rem 0">Loading…</div>';
+ list.innerHTML = '<div style="color:#5a7a56;font-size:.85rem;padding:.5rem 0">Loading tasks...</div>';
  fetch('/admin/quests/' + _qmQuestId + '/entries')
- .then(function(r){ return r.json(); })
+ .then(function(r) { return r.json(); })
  .then(function(d) {
- if (!d.success) { list.innerHTML = '<div style="color:#ef4444;font-size:.82rem">Failed to load tasks</div>'; return; }
- var tasks = (d.quest.tasks || []).concat(d.quest.dailyTasks || []);
- if (!tasks.length) {
- list.innerHTML = '<div style="color:#5a7a56;font-size:.82rem;padding:.5rem 0"><i class="fas fa-info-circle"></i> No tasks yet — add one below.</div>';
- return;
- }
- list.innerHTML = tasks.map(function(t, i) {
- var dayBadge = t.availableFromDay > 0
-   ? ' · <span style="color:#a78bfa;font-size:.68rem;font-weight:700">📅 Day ' + (t.availableFromDay + 1) + '</span>'
-   : '';
- return '<div class="task-row">' +
- '<div class="task-num">' + (i+1) + '</div>' +
- '<div class="task-info">' +
- '<p>' + escHtml(t.title) + '</p>' +
- '<span>' + (t.taskType || 'external') + dayBadge + (t.requiresApproval ? ' · <span style="color:#f59e0b;font-size:.68rem">⏳ manual review</span>' : '') + (t.buttonLink ? ' · <a href="' + escHtml(t.buttonLink) + '" target="_blank" style="color:#60a5fa">' + escHtml(t.buttonLink.replace(/^https?:\/\//,'').substring(0,40)) + '</a>' : '') + '</span>' +
- '</div>' +
- '<span class="task-xp">' + (t.xpReward||0) + ' XP</span>' +
- '</div>';
- }).join('');
+  if (!d.success) { list.innerHTML = '<div style="color:#ef4444;font-size:.82rem">Failed to load tasks</div>'; return; }
+  var tasks = (d.quest.tasks || []).map(function(t) { return Object.assign({}, t, { isDaily: false }); })
+   .concat((d.quest.dailyTasks || []).map(function(t) { return Object.assign({}, t, { isDaily: true }); }));
+  if (!tasks.length) {
+   list.innerHTML = '<div style="color:#5a7a56;font-size:.82rem;padding:.75rem 0"><i class="fas fa-info-circle"></i> No tasks yet. Add the first task below.</div>';
+   return;
+  }
+  var typeNames = { external: 'Link and confirm', submission: 'URL submission', social: 'Social task', verification: 'Custom answer', image_upload: 'Image proof', discord_join: 'Discord verification', telegram_join: 'Telegram verification' };
+  list.innerHTML = tasks.map(function(t, i) {
+   var encoded = encodeURIComponent(JSON.stringify(t));
+   var day = Number(t.availableFromDay) > 0 ? '<span class="task-detail-chip">Unlocks day ' + (Number(t.availableFromDay) + 1) + '</span>' : '';
+   var approval = t.requiresApproval ? '<span class="task-detail-chip task-detail-chip--review">Manual review</span>' : '';
+   var input = t.inputLabel ? '<span class="task-detail-chip">Input: ' + escHtml(t.inputLabel) + '</span>' : '';
+   var button = t.buttonLink ? '<span class="task-detail-chip">Button: ' + escHtml(t.buttonText || 'Open task') + '</span>' : '';
+   var daily = t.isDaily ? '<span class="task-detail-chip">Daily</span>' : '';
+   return '<div class="task-row task-row--managed">' +
+    '<div class="task-num">' + (i + 1) + '</div>' +
+    '<div class="task-info"><p>' + escHtml(t.title) + '</p><span>' + escHtml(t.description || '') + '</span>' +
+    '<div class="task-detail-chips"><span class="task-detail-chip">' + escHtml(typeNames[t.taskType] || t.taskType || 'Task') + '</span>' + daily + day + approval + input + button + '</div></div>' +
+    '<span class="task-xp">' + (t.xpReward || 0) + ' XP</span>' +
+    '<div class="task-row-actions"><button type="button" class="a-btn a-btn-secondary a-btn-sm" data-task="' + encoded + '" onclick="beginEditQuestTask(this.dataset.task)"><i class="fas fa-pen"></i> Edit</button>' +
+    '<button type="button" class="a-btn a-btn-danger a-btn-sm" data-task="' + encoded + '" onclick="deleteQuestTask(this.dataset.task)"><i class="fas fa-trash"></i> Delete</button></div></div>';
+  }).join('');
  })
  .catch(function() { list.innerHTML = '<div style="color:#ef4444;font-size:.82rem">Error loading tasks</div>'; });
 }
-
 /* ── Add task ── */
-function submitAddTask() {
- var title = document.getElementById('nt_title').value.trim();
- var type = document.getElementById('nt_type').value;
- var xp = document.getElementById('nt_xp').value;
- var day = document.getElementById('nt_day').value;
- var link = document.getElementById('nt_link').value.trim();
- var desc = document.getElementById('nt_desc').value.trim();
- if (!title) { showQmFlash('Title is required', false); return; }
- var btn = document.getElementById('addTaskBtn');
- btn.disabled = true; btn.textContent = 'Adding…';
- fetch('/admin/quests/' + _qmQuestId + '/add-task', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ title: title, taskType: type, xpReward: parseInt(xp)||0, availableFromDay: parseInt(day)||0, buttonLink: link, description: desc || title, requiresApproval: document.getElementById('nt_approval').checked })
- })
- .then(function(r){ return r.json(); })
- .then(function(d) {
- btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Add Task';
- if (d.success) {
- showQmFlash('Task added!', true);
+function resetQuestTaskForm() {
+ _qmEditingTaskId = null;
  document.getElementById('nt_title').value = '';
- document.getElementById('nt_link').value = '';
+ document.getElementById('nt_type').value = 'external';
  document.getElementById('nt_desc').value = '';
  document.getElementById('nt_xp').value = '0';
  document.getElementById('nt_day').value = '0';
- loadQmTasks();
- } else {
- showQmFlash(d.message || 'Failed to add task', false);
- }
- })
- .catch(function() {
- btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Add Task';
- showQmFlash('Network error', false);
- });
+ document.getElementById('nt_link').value = '';
+ document.getElementById('nt_buttonText').value = '';
+ document.getElementById('nt_inputLabel').value = '';
+ document.getElementById('nt_inputName').value = '';
+ document.getElementById('nt_inputType').value = 'text';
+ document.getElementById('nt_approval').checked = false;
+ document.getElementById('nt_formTitle').innerHTML = '<i class="fas fa-plus" style="color:var(--green)"></i> Add Task';
+ document.getElementById('addTaskBtn').innerHTML = '<i class="fas fa-plus"></i> Add Task';
+ document.getElementById('cancelTaskEditBtn').style.display = 'none';
+ onTaskTypeChange();
 }
-
+function cancelEditQuestTask() { resetQuestTaskForm(); }
+function beginEditQuestTask(serialized) {
+ try {
+  var task = JSON.parse(decodeURIComponent(serialized));
+  _qmEditingTaskId = task._id;
+  document.getElementById('nt_title').value = task.title || '';
+  document.getElementById('nt_type').value = task.taskType || 'external';
+  document.getElementById('nt_desc').value = task.description || '';
+  document.getElementById('nt_xp').value = task.xpReward || 0;
+  document.getElementById('nt_day').value = task.availableFromDay || 0;
+  document.getElementById('nt_link').value = task.buttonLink || '';
+  document.getElementById('nt_buttonText').value = task.buttonText || '';
+  document.getElementById('nt_inputLabel').value = task.inputLabel || '';
+  document.getElementById('nt_inputName').value = task.inputName || '';
+  document.getElementById('nt_inputType').value = task.inputType || 'text';
+  window._editingQuestTaskDaily = !!task.isDaily;
+  document.getElementById('nt_approval').checked = !!task.requiresApproval;
+  document.getElementById('nt_formTitle').innerHTML = '<i class="fas fa-pen" style="color:var(--green)"></i> Edit Task';
+  document.getElementById('addTaskBtn').innerHTML = '<i class="fas fa-save"></i> Save Changes';
+  document.getElementById('cancelTaskEditBtn').style.display = 'inline-flex';
+  onTaskTypeChange();
+  document.getElementById('nt_approval').checked = !!task.requiresApproval && _qmQuestType !== 'fcfs';
+  document.getElementById('addTaskForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+ } catch (err) { showQmFlash('Could not open this task for editing.', false); }
+}
+function deleteQuestTask(serialized) {
+ var task;
+ try { task = JSON.parse(decodeURIComponent(serialized)); } catch { showQmFlash('Could not read this task.', false); return; }
+ if (!confirm('Delete "' + (task.title || 'this task') + '"? This also removes it from the quest.')) return;
+ fetch('/admin/quests/' + _qmQuestId + '/tasks/' + task._id + '/delete', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ isDaily: !!task.isDaily })
+ }).then(function(r) { return r.json(); }).then(function(d) {
+  if (d.success) { if (_qmEditingTaskId === task._id) resetQuestTaskForm(); showQmFlash('Task deleted.', true); loadQmTasks(); }
+  else showQmFlash(d.message || 'Could not delete task.', false);
+ }).catch(function() { showQmFlash('Network error while deleting task.', false); });
+}
+function submitAddTask() {
+ var title = document.getElementById('nt_title').value.trim();
+ var type = document.getElementById('nt_type').value;
+ var link = document.getElementById('nt_link').value.trim();
+ var inputLabel = document.getElementById('nt_inputLabel').value.trim();
+ var inputName = document.getElementById('nt_inputName').value.trim();
+ if (!title) { showQmFlash('Task title is required.', false); document.getElementById('nt_title').focus(); return; }
+ if (link && !/^https?:\/\//i.test(link)) { showQmFlash('Button links must start with https:// or http://.', false); document.getElementById('nt_link').focus(); return; }
+ if (inputName && !/^[a-z][a-z0-9_]{0,39}$/.test(inputName)) { showQmFlash('Input key must use letters, numbers, or underscores and start with a letter.', false); document.getElementById('nt_inputName').focus(); return; }
+ var btn = document.getElementById('addTaskBtn');
+ var isEditing = !!_qmEditingTaskId;
+ btn.disabled = true;
+ btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (isEditing ? 'Saving...' : 'Adding...');
+ var payload = {
+  title: title, taskType: type, description: document.getElementById('nt_desc').value.trim() || title,
+  xpReward: parseInt(document.getElementById('nt_xp').value, 10) || 0,
+  availableFromDay: parseInt(document.getElementById('nt_day').value, 10) || 0,
+  buttonLink: link, buttonText: document.getElementById('nt_buttonText').value.trim(),
+  inputLabel: inputLabel, inputName: inputName, inputType: document.getElementById('nt_inputType').value,
+  requiresApproval: document.getElementById('nt_approval').checked
+ };
+ var endpoint = isEditing ? '/admin/quests/' + _qmQuestId + '/tasks/' + _qmEditingTaskId + '/update' : '/admin/quests/' + _qmQuestId + '/add-task';
+ if (isEditing) payload.isDaily = !!window._editingQuestTaskDaily;
+ fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+ .then(function(r) { return r.json(); })
+ .then(function(d) {
+  btn.disabled = false;
+  if (d.success) { resetQuestTaskForm(); showQmFlash(isEditing ? 'Task updated.' : 'Task added.', true); loadQmTasks(); }
+  else { btn.innerHTML = '<i class="fas fa-save"></i> ' + (isEditing ? 'Save Changes' : 'Add Task'); showQmFlash(d.message || 'Could not save task.', false); }
+ })
+ .catch(function() { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Task'; showQmFlash('Network error while saving task.', false); });
+}
 /* ── Load entries ── */
 function loadQmEntries() {
  var wrap = document.getElementById('qmEntriesWrap');

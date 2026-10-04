@@ -642,8 +642,19 @@ exports.submitTask = async (req, res) => {
         return res.status(400).json({ success: false, message: `${task.inputLabel || 'Please provide the requested proof'} is required.` });
       }
       submissionText = answer.trim();
+      if (task.inputType === 'link') {
+        let parsedAnswer;
+        try { parsedAnswer = new URL(submissionText); } catch { return res.status(400).json({ success: false, message: 'Enter a valid URL for this task.' }); }
+        if (!['http:', 'https:'].includes(parsedAnswer.protocol)) return res.status(400).json({ success: false, message: 'Task links must use http:// or https://.' });
+      }
     }
 
+    if (task.taskType === 'submission' && !task.inputName) {
+      const submittedUrl = String(submissionUrl || submissionText || '').trim();
+      let parsedUrl;
+      try { parsedUrl = new URL(submittedUrl); } catch { return res.status(400).json({ success: false, message: 'Enter a valid URL for this task.' }); }
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) return res.status(400).json({ success: false, message: 'Task links must use http:// or https://.' });
+    }
     // ==================== SPECIAL TASK TYPE VERIFICATION ====================
     const { verifyTelegramMembership, verifyDiscordMembership, callWebhook } = require('../utils/socialVerification');
 

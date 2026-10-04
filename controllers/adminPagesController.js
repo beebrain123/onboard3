@@ -403,35 +403,97 @@ exports.createQuestPage = async (req, res) => {
     } catch (err) { console.error(err); res.redirect('/admin/quests?error=1'); }
 };
 
+function normalizeQuestTask(body, quest, defaults) {
+    const source = defaults || {};
+    const title = String(body.title ?? source.title ?? '').trim();
+    if (!title) throw new Error('Task title is required.');
+    const allowedTypes = ['social', 'submission', 'verification', 'external', 'image_upload', 'discord_join', 'telegram_join'];
+    const taskType = String(body.taskType ?? source.taskType ?? 'external');
+    if (!allowedTypes.includes(taskType)) throw new Error('Choose a valid task type.');
+    const buttonLink = String(body.buttonLink ?? source.buttonLink ?? '').trim();
+    if (buttonLink) {
+        let parsed;
+        try { parsed = new URL(buttonLink); } catch { throw new Error('Enter a valid button link starting with https://.'); }
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Button links must use http:// or https://.');
+    }
+    const inputLabel = String(body.inputLabel ?? source.inputLabel ?? '').trim();
+    let inputName = String(body.inputName ?? source.inputName ?? '').trim();
+    if (inputLabel && !inputName) {
+        inputName = inputLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'task_input';
+    }
+    if (inputName && !/^[a-z][a-z0-9_]{0,39}$/.test(inputName)) throw new Error('Input key must start with a letter and contain only letters, numbers, and underscores.');
+    const inputType = String(body.inputType ?? source.inputType ?? (taskType === 'submission' ? 'link' : 'text'));
+    if (!['text', 'link', 'file', 'none'].includes(inputType)) throw new Error('Choose a valid answer format.');
+    const isFcfs = quest.questType === 'fcfs';
+    return {
+        title,
+        description: String(body.description ?? source.description ?? title).trim() || title,
+        taskType,
+        xpReward: Math.max(0, parseInt(body.xpReward ?? source.xpReward, 10) || 0),
+        availableFromDay: Math.max(0, parseInt(body.availableFromDay ?? source.availableFromDay, 10) || 0),
+        buttonLink: buttonLink || null,
+        buttonText: String(body.buttonText ?? source.buttonText ?? '').trim() || (buttonLink ? 'Open task' : null),
+        inputLabel: inputLabel || null,
+        inputName: inputName || null,
+        inputType,
+        requiresApproval: !isFcfs && (body.requiresApproval === true || body.requiresApproval === 'true')
+    };
+}
+
 // ── POST /admin/quests/:id/add-task ──────────────────────────────────────────
 exports.addQuestTask = async (req, res) => {
     try {
         const quest = await Quest.findById(req.params.id);
-        if (!quest) return res.json({ success: false, message: 'Quest not found' });
-        const { title, description, taskType, xpReward, availableFromDay, buttonLink, buttonText, requiresApproval, inputLabel } = req.body;
-        const isFcfs = quest.questType === 'fcfs';
-        const task = {
-            title:            title || 'Untitled Task',
-            description:      description || title || 'Complete this task',
-            taskType:         taskType || 'external',
-            xpReward:         Math.max(0, parseInt(xpReward) || 0),
-            availableFromDay: Math.max(0, parseInt(availableFromDay) || 0),
-            order:            quest.tasks.length + 1,
-            buttonLink:       buttonLink || '',
-            buttonText:       buttonText || 'Complete Task',
-            requiresApproval: !isFcfs && (requiresApproval === true || requiresApproval === 'true'),
-            inputLabel:       inputLabel || ''
-        };
+        if (!quest) return res.status(404).json({ success: false, message: 'Quest not found.' });
+        const task = normalizeQuestTask(req.body, quest);
+        task.order = quest.tasks.length + 1;
+        task.isDaily = false;
         quest.tasks.push(task);
         await quest.save();
-        const added = quest.tasks[quest.tasks.length - 1];
-        res.json({ success: true, task: added });
+        res.json({ success: true, task: quest.tasks[quest.tasks.length - 1] });
     } catch (err) {
         console.error('[addQuestTask]', err);
-        res.json({ success: false, message: err.message });
+        res.status(400).json({ success: false, message: err.message });
     }
 };
 
+// ── POST /admin/quests/:id/tasks/:taskId/update ──────────────────────────────
+exports.updateQuestTask = async (req, res) => {
+    try {
+        const quest = await Quest.findById(req.params.id);
+        if (!quest) return res.status(404).json({ success: false, message: 'Quest not found.' });
+        const isDaily = req.body.isDaily === true || req.body.isDaily === 'true';
+        const list = isDaily ? quest.dailyTasks : quest.tasks;
+        const task = list.id(req.params.taskId);
+        if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+        const normalized = normalizeQuestTask(req.body, quest, task.toObject());
+        Object.assign(task, normalized);
+        await quest.save();
+        res.json({ success: true, task });
+    } catch (err) {
+        console.error('[updateQuestTask]', err);
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+
+// ── POST /admin/quests/:id/tasks/:taskId/delete ──────────────────────────────
+exports.deleteQuestTask = async (req, res) => {
+    try {
+        const quest = await Quest.findById(req.params.id);
+        if (!quest) return res.status(404).json({ success: false, message: 'Quest not found.' });
+        const isDaily = req.body.isDaily === true || req.body.isDaily === 'true';
+        const list = isDaily ? quest.dailyTasks : quest.tasks;
+        const task = list.id(req.params.taskId);
+        if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+        list.pull(req.params.taskId);
+        list.forEach((item, index) => { item.order = index + 1; });
+        await quest.save();
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[deleteQuestTask]', err);
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
 // ── GET /admin/quests/:id/entries ─────────────────────────────────────────────
 exports.getQuestEntries = async (req, res) => {
     try {
