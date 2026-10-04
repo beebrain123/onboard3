@@ -221,13 +221,22 @@ router.post('/create-quest', businessAuth, async (req, res) => {
       title, description, shortDescription, budget, endDate, startDate,
       category, difficulty, questType, baseXpReward, image, tasksJson,
       maxParticipants,
-      competitionTopWinners, competitionWinnerXP,
+      competitionTopWinners, competitionWinnerXP, rankPercentages,
       referralEnabled, referralJoinXP, referralCompleteXP,
       batchEnabled, batchSize, batchIntervalHours,
       rewardPerPerson, maxWinners
     } = req.body;
 
     const totalBudget = parseFloat(budget);
+    let rankShares = [];
+    if (typeof rankPercentages === 'string') { try { rankShares = JSON.parse(rankPercentages); } catch (_) { rankShares = []; } }
+    else if (Array.isArray(rankPercentages)) rankShares = rankPercentages.map(Number);
+    if (questType === 'competition') {
+      const count = Math.max(1, Math.min(100, parseInt(competitionTopWinners, 10) || 10));
+      if (rankShares.length !== count || rankShares.some(p => !Number.isFinite(Number(p)) || Number(p) < 0 || Number(p) > 100) || Math.abs(rankShares.reduce((sum, p) => sum + Number(p), 0) - 100) > 0.01) {
+        return res.redirect('/business/dashboard?tab=quests&error=invalid_reward_split');
+      }
+    }
 
     if (!title || !description || !totalBudget || totalBudget < 1) {
       return res.redirect('/business/dashboard?tab=quests&error=missing_fields');
@@ -268,7 +277,8 @@ router.post('/create-quest', businessAuth, async (req, res) => {
       competitionConfig: {
         enabled:       questType === 'competition',
         topWinnersCount: parseInt(competitionTopWinners) || 10,
-        winnerBonusXP:   parseInt(competitionWinnerXP)   || 0
+        winnerBonusXP:   parseInt(competitionWinnerXP)   || 0,
+        rankPercentages: questType === 'competition' ? rankShares : []
       },
       referralConfig: {
         enabled:              referralEnabled === 'on' || referralEnabled === 'true',
@@ -564,11 +574,15 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
       return res.json({ success: false, message: 'No completions to distribute rewards to' });
     }
 
-    const perUser = Math.round(pool / winners.length * 100) / 100;
+    const configuredShares = quest.questType === 'competition' ? quest.competitionConfig?.rankPercentages : null;
+    const useRankShares = Array.isArray(configuredShares) && configuredShares.length >= winners.length && Math.abs(configuredShares.reduce((sum, p) => sum + Number(p || 0), 0) - 100) <= 0.01;
+    const payoutAmounts = winners.map((_, index) => useRankShares ? Math.round(pool * Number(configuredShares[index]) / 100 * 100) / 100 : Math.round(pool / winners.length * 100) / 100);
+    const perUser = payoutAmounts[0] || 0;
     const io = req.app.get('io');
 
-    await Promise.all(winners.map(async (w) => {
-      w.usdcEarned    = perUser;
+    await Promise.all(winners.map(async (w, index) => {
+      const rewardAmount = payoutAmounts[index];
+      w.usdcEarned    = rewardAmount;
       w.rewardsClaimed = true;
       await w.save();
 
@@ -577,9 +591,9 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
       const userDoc = await User.findById(userId);
       if (!userDoc) return;
 
-      userDoc.usdcBalance = Math.round(((userDoc.usdcBalance || 0) + perUser) * 100) / 100;
+      userDoc.usdcBalance = Math.round(((userDoc.usdcBalance || 0) + rewardAmount) * 100) / 100;
       userDoc.recentActivity.unshift({
-        action: `Received $${perUser.toFixed(2)} USDC from quest: ${quest.title}`,
+        action: `Received $${rewardAmount.toFixed(2)} USDC from quest: ${quest.title}`,
         timestamp: new Date()
       });
       if (userDoc.recentActivity.length > 10) userDoc.recentActivity = userDoc.recentActivity.slice(0, 10);
@@ -590,7 +604,7 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
           type: 'usdc_earned',
           userId: userDoc._id,
           username: userDoc.username,
-          data: { amount: perUser, questTitle: quest.title }
+          data: { amount: rewardAmount, questTitle: quest.title }
         }).save();
         io?.emit('feed_event', { ...ev.toObject(), viewerLiked: false });
       } catch (e) { console.error('Feed event error (disburse):', e.message); }
@@ -602,9 +616,10 @@ router.post('/api/quest/:id/disburse', businessAuth, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Distributed $${pool.toFixed(2)} USDC to ${winners.length} user${winners.length !== 1 ? 's' : ''} ($${perUser.toFixed(2)} each)`,
+      message: `Distributed prize shares to ${winners.length} winner${winners.length !== 1 ? 's' : ''}.`,
       winners: winners.length,
-      perUser
+      perUser,
+      payouts: payoutAmounts
     });
   } catch (err) {
     console.error('Disburse error:', err);
