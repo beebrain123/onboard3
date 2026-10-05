@@ -1569,13 +1569,28 @@
 
  /* ── Leaderboard AJAX loader ── */
  var _lbPrizeTiers = <%- JSON.stringify(quest.prizeDistribution || []) %>;
+ var _lbRankPercents = <%- JSON.stringify(quest.competitionConfig?.rankPercentages || []) %>;
+ var _lbRewardPool = <%- JSON.stringify(Number(quest.usdcReward) || 0) %>;
+
+ function getPrizePercentLb(rank) {
+ var percent = Number(_lbRankPercents[rank - 1]);
+ return Number.isFinite(percent) && percent > 0 ? percent : null;
+ }
 
  function getPrizeLb(rank, tiers) {
- if (!tiers || !tiers.length) return 0;
- for (var i = 0; i < tiers.length; i++) {
- if (rank >= tiers[i].from && rank <= tiers[i].to) return tiers[i].amount;
+ if (tiers && tiers.length) {
+  for (var i = 0; i < tiers.length; i++) {
+   if (rank >= tiers[i].from && rank <= tiers[i].to) return Number(tiers[i].amount) || 0;
+  }
  }
- return 0;
+ var percent = getPrizePercentLb(rank);
+ return percent === null ? 0 : Math.round((_lbRewardPool * percent / 100) * 100) / 100;
+ }
+
+ function getPrizeLabelLb(rank, tiers) {
+ var amount = getPrizeLb(rank, tiers);
+ var percent = getPrizePercentLb(rank);
+ return '$' + amount.toFixed(2) + (percent === null ? '' : ' (' + percent + '%)');
  }
 
  function loadLeaderboard() {
@@ -1614,7 +1629,7 @@
  '<div style="width:44px;height:44px;border-radius:12px;margin:0 auto .5rem;overflow:hidden;background:rgba(94,194,19,.1);border:1px solid rgba(94,194,19,.2);display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--green);font-size:1rem;flex-shrink:0">' + av + '</div>' +
  '<div class="podium-name">' + (e.username || 'Anonymous') + '</div>' +
  '<div class="podium-xp">' + e.totalXp.toLocaleString() + ' XP</div>' +
- (prize ? '<div style="font-size:.82rem;font-weight:900;color:#4ade80;margin-top:.2rem"> $' + prize + '</div>' : '') +
+ (prize > 0 ? '<div style="font-size:.82rem;font-weight:900;color:#4ade80;margin-top:.2rem">' + getPrizeLabelLb(e.rank, _lbPrizeTiers) + '</div>' : '') +
  '<div class="podium-time">' + (e.timeSpentMinutes || 0) + 'm</div>' +
  '</div>';
  }
@@ -1641,7 +1656,7 @@
  '<div class="lb-username">' + (entry.username || 'Anonymous') +
  (isMe ? '<span class="lb-you">YOU</span>' : '') +
  (entry.isWinner ? '<i class="fas fa-trophy" style="color:var(--green);font-size:.75rem"></i>' : '') +
- (rp ? '<span style="background:rgba(74,222,128,.12);color:#4ade80;font-size:.65rem;font-weight:900;padding:.1rem .45rem;border-radius:4px;border:1px solid rgba(74,222,128,.3)"> $' + rp + '</span>' : '') +
+ (rp > 0 ? '<span style="background:rgba(74,222,128,.12);color:#4ade80;font-size:.65rem;font-weight:900;padding:.1rem .45rem;border-radius:4px;border:1px solid rgba(74,222,128,.3)">' + getPrizeLabelLb(entry.rank, _lbPrizeTiers) + '</span>' : '') +
  '</div>' +
  '<div class="lb-meta">' + (entry.timeSpentMinutes || 0) + 'm' + (dAgo !== null ? ' • ' + dAgo + 'd ago' : ' • In progress') + '</div>' +
  '</div>' +
