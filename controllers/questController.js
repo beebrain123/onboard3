@@ -69,6 +69,7 @@ exports.getAllQuests = async (req, res) => {
         availableQuests: [],
         completedQuests: [],
         pastQuests: [],
+        upcomingQuests: [],
         completedCount: 0
       });
     }
@@ -106,6 +107,7 @@ exports.getAllQuests = async (req, res) => {
     const availableQuests = [];
     const completedQuests = [];
     const pastQuests = [];
+    const upcomingQuests = [];
     const specialCampaigns = [];
 
     allQuests.forEach(quest => {
@@ -135,6 +137,11 @@ exports.getAllQuests = async (req, res) => {
         return;
       }
 
+      if (quest.startDate && quest.startDate > now) {
+        upcomingQuests.push(questData);
+        return;
+      }
+
       if (isAvailableNow) {
         if (progress && progress.status === 'completed') {
           completedQuests.push(questData);
@@ -155,6 +162,7 @@ exports.getAllQuests = async (req, res) => {
       availableQuests: availableQuests || [],
       completedQuests: completedQuests || [],
       pastQuests: pastQuests || [],
+      upcomingQuests: upcomingQuests || [],
       specialCampaigns: specialCampaigns || [],
       completedCount: completedQuests.length
     });

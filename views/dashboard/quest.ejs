@@ -642,9 +642,26 @@
  <% } %>
 
  <!-- ══ AVAILABLE QUESTS ══ -->
- <div class="card" style="animation-delay:120ms">
+ <% if (upcomingQuests && upcomingQuests.length > 0) { %>
+ <div class="card" style="animation-delay:100ms">
+ <div class="section-row"><h3><i class="fas fa-calendar-alt"></i> Upcoming Quests</h3><span class="section-count"><%= upcomingQuests.length %> scheduled</span></div>
+ <div class="quest-grid">
+ <% upcomingQuests.forEach((quest, qi) => { const qimg = questImage(quest); %>
+ <div class="qcard" style="cursor:default;animation-delay:<%= qi * 50 %>ms">
+ <div class="qcard-img qcard-img--logo"><div class="qcard-logo-wrap <%= !qimg.isPartner ? 'qcard-logo-wrap--brand' : '' %>"><img src="<%= qimg.logo %>" alt="<%= quest.title %>" loading="lazy"></div></div>
+ <div class="qcard-top"><div class="qcard-icon"><i class="fas fa-calendar-alt"></i></div><div class="qcard-badges"><span class="qbadge"><i class="fas fa-clock"></i> Starts <%= new Date(quest.startDate).toLocaleDateString() %></span>
+ <% if ((quest.baseXpReward || quest.xpReward) > 0) { %><span class="qbadge qbadge--xp"><i class="fas fa-bolt"></i> <%= quest.baseXpReward || quest.xpReward %> XP</span><% } %>
+ <% if (quest.usdcReward > 0) { %><span class="qbadge qbadge--usdc"><i class="fas fa-coins"></i> <%= quest.usdcReward %> USDC</span><% } %></div></div>
+ <div><div class="qcard-title"><%= quest.title %></div><div class="qcard-desc"><%= quest.shortDescription || '' %></div></div>
+ <div class="qcard-foot"><span class="qcard-meta-item"><i class="fas fa-hourglass-half"></i> Opens <%= new Date(quest.startDate).toLocaleString() %></span><span class="qbadge">Coming soon</span></div>
+ </div>
+ <% }); %>
+ </div></div>
+ <% } %>
+
+<div class="card" style="animation-delay:120ms">
  <div class="section-row">
- <h3><i class="fas fa-trophy"></i> Available Quests</h3>
+<h3><i class="fas fa-trophy"></i> Available Quests</h3>
  <span class="section-count"><%= availableQuests.length %> available</span>
  </div>
 
