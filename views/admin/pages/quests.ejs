@@ -339,7 +339,7 @@
  <h3><i class="fas fa-plus" style="color:var(--green)"></i> Create New Quest</h3>
  <button class="a-modal-close" onclick="closeModal('createQuestModal')"><i class="fas fa-times"></i></button>
  </div>
- <form method="POST" action="/admin/quests/create">
+ <form id="createQuestForm" method="POST" action="/admin/quests/create" onsubmit="return normalizeQuestDateInputs(this)">
  <div class="a-form-row">
  <div class="a-form-group">
  <label>Title *</label>
@@ -665,6 +665,18 @@
 
 <script>
 /* ── Modal helpers ── */
+function normalizeQuestDateInputs(form) {
+ document.querySelectorAll('input[type="datetime-local"][name]').forEach(function(input) {
+  if (!form.contains(input) || !input.value || input.name.endsWith('Local')) return;
+  var utcValue;
+  try { utcValue = new Date(input.value).toISOString(); } catch (_) { return; }
+  var hidden = document.createElement('input');
+  hidden.type = 'hidden'; hidden.name = input.name; hidden.value = utcValue;
+  input.name = input.name + 'Local';
+  form.appendChild(hidden);
+ });
+ return true;
+}
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.a-modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
