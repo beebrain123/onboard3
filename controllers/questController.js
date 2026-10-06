@@ -820,11 +820,15 @@ exports.submitTask = async (req, res) => {
       // ✅ QUEST-SPECIFIC: Base XP for completing quest
       const baseQuestXp = quest.baseXpReward || 0;
       userProgress.xpBreakdown.baseXp = baseQuestXp;
-      // FCFS: instant per-person reward from rewardPlan; other types use full pool (legacy)
-      const fcfsReward = (quest.questType === 'fcfs' && quest.rewardPlan && quest.rewardPlan.rewardPerPerson > 0)
-        ? quest.rewardPlan.rewardPerPerson
-        : (quest.usdcReward || 0);
-      userProgress.usdcEarned = fcfsReward;
+      // Ranked USDC is a shared prize pool: do not credit the whole pool to each completer.
+      // The admin distributes configured rank shares after results are finalized.
+      const rankPercentages = quest.competitionConfig?.rankPercentages;
+      const hasRankedPrizePool = quest.questType === 'competition' ||
+        (Array.isArray(rankPercentages) && rankPercentages.length > 0);
+      const instantUsdcReward = quest.questType === 'fcfs'
+        ? Math.max(0, Number(quest.rewardPlan?.rewardPerPerson) || 0)
+        : (hasRankedPrizePool ? 0 : Math.max(0, Number(quest.usdcReward) || 0));
+      userProgress.usdcEarned = instantUsdcReward;
       userProgress.badgeEarned = quest.badgeReward;
 
       // ✅ Recalculate totalXp with base XP
