@@ -3,6 +3,7 @@ const UserQuestProgress = require("../models/UserQuestProgress");
 const User = require("../models/User");
 const QuestApplication = require("../models/QuestApplication");
 const { notify } = require('../utils/notificationService');
+const { syncQuestProgress } = require('../utils/questProgressSync');
 
 // In-memory leaderboard cache — 5 min TTL, stampede protection
 const _lbCache   = new Map();
@@ -250,50 +251,9 @@ exports.getQuestDetails = async (req, res) => {
       });
       await userProgress.save();
     } else {
-      // 🔄 SYNC PROGRESS: Handle tasks added/removed from quest
-      const allTasks = [...quest.tasks, ...(quest.dailyTasks || [])];
-      const currentTaskIds = allTasks.map(t => t._id.toString());
-      let progressUpdated = false;
-
-      // Remove tasks that no longer exist in quest
-      const validTaskProgress = userProgress.taskProgress.filter(tp => {
-        const taskStillExists = currentTaskIds.includes(tp.taskId.toString());
-        if (!taskStillExists && !tp.isCompleted) {
-          console.log(`🗑️ Removing deleted task ${tp.taskId} from user progress`);
-          progressUpdated = true;
-          if (tp.isCompleted) {
-            userProgress.tasksCompleted -= 1;
-          }
-        }
-        return taskStillExists;
-      });
-
-      // Add new tasks that don't exist in progress
-      allTasks.forEach(task => {
-        const exists = validTaskProgress.find(tp => tp.taskId.toString() === task._id.toString());
-        if (!exists) {
-          console.log(`➕ Adding new task ${task._id} to user progress`);
-          validTaskProgress.push({
-            taskId: task._id,
-            isCompleted: false
-          });
-          progressUpdated = true;
-        }
-      });
-
-      if (progressUpdated) {
-        userProgress.taskProgress = validTaskProgress;
-        userProgress.totalTasks = allTasks.length;
-        userProgress.progress = Math.round((userProgress.tasksCompleted / userProgress.totalTasks) * 100);
-
-        if (userProgress.tasksCompleted === userProgress.totalTasks && userProgress.status !== 'completed') {
-          userProgress.status = 'completed';
-          userProgress.completedAt = new Date();
-        }
-
-        // Fire-and-forget — don't block the page render for a housekeeping write
-        userProgress.save().catch(e => console.error('Progress sync save error:', e));
-        console.log(`✅ User progress synced - ${userProgress.tasksCompleted}/${userProgress.totalTasks} tasks`);
+      if (syncQuestProgress(userProgress, quest)) {
+        await userProgress.save();
+        _invalidateLbCache(questId);
       }
     }
 

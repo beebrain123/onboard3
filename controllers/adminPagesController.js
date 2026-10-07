@@ -6,6 +6,7 @@ const Transaction       = require('../models/Transaction');
 const CourseApplication = require('../models/CourseApplication');
 const PathwayConfig     = require('../models/PathwayConfig');
 const UserQuestProgress = require('../models/UserQuestProgress');
+const { syncQuestProgressForQuest } = require('../utils/questProgressSync');
 
 const isAdmin = (req, res) => {
     if (!req.session.userId) { res.redirect('/auth'); return false; }
@@ -450,6 +451,7 @@ exports.addQuestTask = async (req, res) => {
         task.isDaily = false;
         quest.tasks.push(task);
         await quest.save();
+        await syncQuestProgressForQuest(quest);
         res.json({ success: true, task: quest.tasks[quest.tasks.length - 1] });
     } catch (err) {
         console.error('[addQuestTask]', err);
@@ -488,6 +490,7 @@ exports.deleteQuestTask = async (req, res) => {
         list.pull(req.params.taskId);
         list.forEach((item, index) => { item.order = index + 1; });
         await quest.save();
+        await syncQuestProgressForQuest(quest);
         res.json({ success: true });
     } catch (err) {
         console.error('[deleteQuestTask]', err);
