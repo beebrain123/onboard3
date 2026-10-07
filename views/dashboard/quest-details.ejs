@@ -444,7 +444,8 @@
  <% } else { %><span class="qd-badge qd-badge--type">Quest</span><% } %>
  <span class="qd-badge qd-badge--diff"><%= quest.difficulty %></span>
  <span class="qd-badge qd-badge--diff"><%= quest.category %></span>
- <% if (userProgress && userProgress.status === 'completed') { %><span class="qd-badge qd-badge--done"><i class="fas fa-check"></i> Completed</span><% } %>
+ <% if (questStatus === 'active') { %><span class="qd-badge" style="background:rgba(94,194,19,.12);color:#8ce66a;border:1px solid rgba(94,194,19,.3)"><i class="fas fa-circle" style="font-size:.45rem"></i> Campaign active</span><% } %>
+ <% if (userProgress && userProgress.status === 'completed') { %><span class="qd-badge qd-badge--done"><i class="fas fa-check"></i> You completed</span><% } %>
  </div>
  <h1 class="qd-title"><%= quest.title %></h1>
  <p class="qd-short"><%= quest.shortDescription %></p>
@@ -453,7 +454,7 @@
  <span class="qd-reward-pill qd-reward-pill--xp"><i class="fas fa-bolt"></i> <%= quest.baseXpReward || quest.xpReward %> XP</span>
  <% } %>
  <% if (quest.usdcReward > 0) { %>
- <span class="qd-reward-pill qd-reward-pill--usdc"><i class="fas fa-coins"></i> $<%= quest.usdcReward %> USDC</span>
+ <span class="qd-reward-pill qd-reward-pill--usdc"><i class="fas fa-coins"></i> $<%= quest.usdcReward %> <%= quest.competitionConfig?.rankPercentages?.length ? 'prize pool' : quest.questType === 'fcfs' ? 'USDC per winner' : 'USDC' %></span>
  <% } %>
  <% if (userProgress && userProgress.status === 'completed' && userProgress.leaderboardRank) { %>
  <span class="qd-reward-pill" style="background:rgba(255,193,7,0.15);color:#fbbf24;border:1px solid rgba(255,193,7,0.3)"><i class="fas fa-medal"></i> Rank #<%= userProgress.leaderboardRank %></span>

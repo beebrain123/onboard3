@@ -574,7 +574,7 @@
  <div class="quest-stats-row">
  <div class="qs-box" style="animation-delay:0ms">
  <div class="qs-val"><span><%= completedCount %></span></div>
- <div class="qs-lbl">Completed</div>
+ <div class="qs-lbl">You Completed</div>
  </div>
  <div class="qs-box" style="animation-delay:60ms">
  <div class="qs-val"><span><%= activeQuests.length %></span></div>
@@ -718,8 +718,8 @@
  <% if (completedQuests && completedQuests.length > 0) { %>
  <div class="card" style="animation-delay:180ms">
  <div class="section-row">
- <h3><i class="fas fa-check-circle"></i> Completed</h3>
- <span class="section-count"><%= completedQuests.length %> done</span>
+ <h3><i class="fas fa-check-circle"></i> Your Completed Quests</h3>
+ <span class="section-count"><%= completedQuests.length %> completed by you</span>
  </div>
  <div class="qlist">
  <% completedQuests.forEach((quest, qi) => {
@@ -731,10 +731,10 @@
  </div>
  <div class="qlist-body">
  <div class="qlist-title"><%= quest.title %></div>
- <div class="qlist-sub">Completed <%= new Date(quest.userProgress.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) %></div>
+ <div class="qlist-sub">You completed this on <%= new Date(quest.userProgress.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) %><% if (quest.endDate && new Date(quest.endDate) > new Date()) { %> · Campaign open until <%= new Date(quest.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}) %><% } %></div>
  </div>
  <div class="qlist-right">
- <span class="qbadge qbadge--done"><i class="fas fa-check"></i> Done</span>
+ <span class="qbadge qbadge--done"><i class="fas fa-check"></i> You completed</span>
  </div>
  </a>
  <% }); %>
