@@ -13,16 +13,17 @@ const ZAD_HEADERS = () => ({ Authorization: `Bearer ${ZAD_KEY}`, 'Content-Type':
 let _priceCache   = {};
 let _priceCacheAt = 0;
 // Maps token symbol → CoinGecko ID (known tokens only)
-const GECKO_IDS = { STX: 'blockstack', BTC: 'bitcoin', sBTC: 'bitcoin', ETH: 'ethereum' };
+const GECKO_IDS = { STX: 'blockstack', BTC: 'bitcoin', sBTC: 'bitcoin', ETH: 'ethereum', LEO: 'leo-2' };
 const LEO_DIA_ASSET = 'https://api.diadata.org/v1/assetQuotation/Stacks/SP1AY6K3PQV5MRT6R4S671NWW2FRVPKM0BR162CT6.leo-token';
 // Stablecoins always $1
 const STABLES   = new Set(['USDC','USDT','DAI','BUSD','TUSD']);
+const normalizeTokenSymbol = (symbol) => String(symbol || '').replace(/^\$/, '').trim().toUpperCase();
 
 async function getTokenPrices(symbols) {
   const now = Date.now();
-  const needsLeoPrice = symbols.some(s => s.toUpperCase() === 'LEO');
+  const needsLeoPrice = symbols.some(s => normalizeTokenSymbol(s) === 'LEO');
   if (now - _priceCacheAt < 10 * 60 * 1000 && Object.keys(_priceCache).length && (!needsLeoPrice || _priceCache.LEO)) return _priceCache;
-  const ids = [...new Set(symbols.map(s => GECKO_IDS[s]).filter(Boolean))];
+  const ids = [...new Set(symbols.map(s => GECKO_IDS[normalizeTokenSymbol(s)]).filter(Boolean))];
   const prices = {};
   if (ids.length) {
     try {
@@ -34,7 +35,7 @@ async function getTokenPrices(symbols) {
       }
     } catch {}
   }
-  if (needsLeoPrice) {
+  if (needsLeoPrice && !prices.LEO) {
     try {
       const leo = await axios.get(LEO_DIA_ASSET, { timeout: 6000 });
       const leoUSD = Number(leo.data?.Price ?? leo.data?.price);
@@ -49,8 +50,8 @@ async function getTokenPrices(symbols) {
 // Convert totalPayment to USD string, returns null if not possible
 function toUSD(amount, symbol, prices) {
   if (!amount || !symbol) return null;
-  if (STABLES.has(symbol)) return '$' + Number(amount).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const price = prices[symbol.toUpperCase()];
+  if (STABLES.has(normalizeTokenSymbol(symbol))) return '$' + Number(amount).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const price = prices[normalizeTokenSymbol(symbol)];
   if (!price) return null;
   const usd = amount * price;
   if (usd >= 1000) return '$' + Math.round(usd).toLocaleString('en-US');
