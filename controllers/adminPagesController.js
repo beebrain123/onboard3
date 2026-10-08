@@ -211,7 +211,7 @@ exports.settingsPage = async (req, res) => {
 // ── POST /admin/settings/pathways ─────────────────────────────────────────────
 exports.savePathways = async (req, res) => {
     try {
-        const pathways = ['web3_jobs','ai','nft','trading'];
+        const pathways = ['web3_jobs','ai'];
         for (const pw of pathways) {
             const groupLink = req.body[pw+'_groupLink'] || null;
             const xLink     = req.body[pw+'_xLink'] || null;

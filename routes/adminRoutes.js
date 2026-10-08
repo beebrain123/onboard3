@@ -2644,11 +2644,9 @@ const PathwayConfigModel = require('../models/PathwayConfig');
 
 const PW_META_ADMIN = {
     web3_jobs: { name:'Web3 Jobs',             icon:'fa-briefcase',  color:'#fbbf24' },
-    ai:        { name:'AI & Web3',             icon:'fa-microchip',  color:'#c084fc' },
-    nft:       { name:'NFTs & Digital Assets', icon:'fa-image',      color:'#f472b6' },
-    trading:   { name:'Trading',               icon:'fa-chart-line', color:'#10b981' }
+    ai:        { name:'AI & Web3',             icon:'fa-microchip',  color:'#c084fc' }
 };
-const ADMIN_PATHWAYS = ['web3_jobs','ai','nft','trading'];
+const ADMIN_PATHWAYS = ['web3_jobs','ai'];
 
 router.get('/pathway-content', isAdminPage, async (req, res) => {
     try {

@@ -295,8 +295,6 @@ const VALID_PATHWAY_SECTIONS = ['update', 'resource', 'opportunity', 'class', 'e
 const PATHWAY_META = {
   web3_jobs: { name:'Web3 Jobs',             icon:'fa-briefcase',  color:'#fbbf24', bg:'rgba(251,191,36,0.1)',  border:'rgba(251,191,36,0.3)',  tagline:'Find and land opportunities in Web3.' },
   ai:        { name:'AI & Web3',             icon:'fa-microchip',  color:'#c084fc', bg:'rgba(168,85,247,0.1)',  border:'rgba(168,85,247,0.3)',  tagline:'Explore the intersection of AI and Web3.' },
-  nft:       { name:'NFTs & Digital Assets', icon:'fa-image',      color:'#f472b6', bg:'rgba(236,72,153,0.1)',  border:'rgba(236,72,153,0.3)',  tagline:'Create, trade and collect digital assets.' },
-  trading:   { name:'Trading',               icon:'fa-chart-line', color:'#10b981', bg:'rgba(16,185,129,0.1)',  border:'rgba(16,185,129,0.3)',  tagline:'Master markets and trading strategies.' }
 };
 
 router.get('/career-paths', isAuthenticated, async (req, res) => {
@@ -305,9 +303,15 @@ router.get('/career-paths', isAuthenticated, async (req, res) => {
     const PathwayContent = require('../models/PathwayContent');
 
     const user = await User.findById(req.session.userId).select('-password').lean();
+    if (['nft', 'trading'].includes(user?.pathway)) {
+      await User.updateOne({ _id: user._id }, { $set: { pathway: null, pathwayStatus: null, 'pathwayApplication.appliedAt': null }, $pull: { pathwayLeadOf: { $in: ['nft', 'trading'] } } });
+      user.pathway = null;
+      user.pathwayStatus = null;
+      user.pathwayLeadOf = (user.pathwayLeadOf || []).filter(p => !['nft', 'trading'].includes(p));
+    }
 
     // Show the user's own pathway + any pathways they lead (deduped, valid slugs only)
-    const myLeadPaths = Array.isArray(user.pathwayLeadOf) ? user.pathwayLeadOf : [];
+    const myLeadPaths = Array.isArray(user.pathwayLeadOf) ? user.pathwayLeadOf.filter(p => PATHWAY_META[p]) : [];
     const rawPaths = [...new Set([user.pathway, ...myLeadPaths].filter(Boolean))];
     const PATHWAYS = rawPaths.filter(p => PATHWAY_META[p]);
 
@@ -466,7 +470,7 @@ router.get('/career-paths/:pathway', isAuthenticated, async (req, res) => {
 });
 
 // ── Pathway selection ─────────────────────────────────────────────────────────
-const VALID_PATHWAYS = ['web3_jobs', 'ai', 'nft', 'trading'];
+const VALID_PATHWAYS = ['web3_jobs', 'ai'];
 
 router.post('/select-pathway', isAuthenticated, async (req, res) => {
   try {
@@ -502,6 +506,7 @@ router.post('/select-pathway', isAuthenticated, async (req, res) => {
 // Returns community links for a pathway (used by Join Community button)
 router.get('/pathway-config/:pathway', async (req, res) => {
   try {
+    if (!PATHWAY_META[req.params.pathway]) return res.json({ success: false, config: {} });
     const config = await require('../models/PathwayConfig').findOne({ pathway: req.params.pathway }).lean();
     res.json({ success: true, config: config || {} });
   } catch (err) {

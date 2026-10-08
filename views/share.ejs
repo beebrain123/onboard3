@@ -285,7 +285,7 @@
 </nav>
 
 <%
- var pathwayLabels = { web3_jobs:'Web3 Jobs', ai:'AI & Web3', trading:'Trading', nft:'NFT' };
+ var pathwayLabels = { web3_jobs:'Web3 Jobs', ai:'AI & Web3' };
  var memberSince = new Date(cardUser.createdAt);
  var sinceStr = memberSince.toLocaleDateString('en-US', { month:'long', year:'numeric' });
  var tweetText = encodeURIComponent(
@@ -338,7 +338,7 @@
  </div>
  </div>
 
- <% if (cardUser.pathway) { %>
+ <% if (['web3_jobs','ai'].includes(cardUser.pathway)) { %>
  <div class="card-pathway">
  <i class="fas fa-route"></i>
  <%= pathwayLabels[cardUser.pathway] || cardUser.pathway %> Pathway

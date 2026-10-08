@@ -314,12 +314,10 @@
  </div>
 
  <!-- ══ PATHWAY ══ -->
- <% if (user.pathway) {
+ <% if (['web3_jobs','ai'].includes(user.pathway)) {
  const pathwayMeta = {
  web3_jobs: { fa:'fa-briefcase', name:'Web3 Jobs', desc:'Finding opportunities in Web3', color:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)', text:'#fbbf24' },
  ai: { fa:'fa-microchip', name:'AI & Web3', desc:'Exploring AI in decentralized tech', color:'rgba(168,85,247,0.1)', border:'rgba(168,85,247,0.3)', text:'#c084fc' },
- trading: { fa:'fa-chart-line', name:'Trading', desc:'Mastering Web3 trading strategies', color:'rgba(16,185,129,0.1)', border:'rgba(16,185,129,0.3)', text:'#10b981' },
- nft: { fa:'fa-image', name:'NFTs & Digital Assets', desc:'Creating and trading digital assets', color:'rgba(236,72,153,0.1)', border:'rgba(236,72,153,0.3)', text:'#f472b6' }
  };
  const pm = pathwayMeta[user.pathway] || pathwayMeta.web3_jobs;
  %>

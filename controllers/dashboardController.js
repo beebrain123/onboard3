@@ -57,6 +57,16 @@ exports.getDashboard = async (req, res) => {
       return res.redirect('/auth');
     }
 
+    if (['nft', 'trading'].includes(user.pathway)) {
+      await User.updateOne({ _id: user._id }, {
+        $set: { pathway: null, pathwayStatus: null, 'pathwayApplication.appliedAt': null },
+        $pull: { pathwayLeadOf: { $in: ['nft', 'trading'] } }
+      });
+      user.pathway = null;
+      user.pathwayStatus = null;
+      user.pathwayLeadOf = (user.pathwayLeadOf || []).filter(p => !['nft', 'trading'].includes(p));
+    }
+
     // Get total users (cached 5 min)
     const totalUsers = await getTotalUsers();
 

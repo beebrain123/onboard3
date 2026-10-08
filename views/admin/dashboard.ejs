@@ -535,16 +535,8 @@
  <input type="url" id="pw-group-ai" placeholder="Telegram group: https://t.me/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit;margin-bottom:.5rem">
  <input type="url" id="pw-x-ai" placeholder="X community: https://x.com/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit">
  </div>
- <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:1rem">
- <div style="font-size:.85rem;font-weight:700;color:#5EC213;margin-bottom:.625rem"><i class="fas fa-image"></i> NFTs &amp; Digital Assets</div>
- <input type="url" id="pw-group-nft" placeholder="Telegram group: https://t.me/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit;margin-bottom:.5rem">
- <input type="url" id="pw-x-nft" placeholder="X community: https://x.com/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit">
- </div>
- <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:1rem">
- <div style="font-size:.85rem;font-weight:700;color:#5EC213;margin-bottom:.625rem"><i class="fas fa-chart-line"></i> Trading</div>
- <input type="url" id="pw-group-trading" placeholder="Telegram group: https://t.me/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit;margin-bottom:.5rem">
- <input type="url" id="pw-x-trading" placeholder="X community: https://x.com/..." style="width:100%;padding:.6rem .875rem;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:.85rem;font-family:inherit">
- </div>
+
+
  </div>
  <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem">
  <button onclick="savePathwayConfigs()" style="padding:.65rem 1.5rem;background:linear-gradient(135deg,#5EC213,#45960E);border:none;border-radius:9px;color:#000;font-weight:800;font-size:.875rem;cursor:pointer;font-family:inherit">
@@ -2132,7 +2124,7 @@ function showEmailMsg(text, ok) {
 
 /* ── Pathway community config ── */
 async function savePathwayConfigs() {
- const pathways = ['web3_jobs', 'ai', 'nft', 'trading'];
+ const pathways = ['web3_jobs', 'ai'];
  let saved = 0;
  for (const pw of pathways) {
  const groupLink = (document.getElementById('pw-group-' + pw) || {}).value || null;
