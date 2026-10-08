@@ -14,6 +14,9 @@ const NETWORK_FEE = BigInt(2000); // 0.002 STX
 const USDCX_CONTRACT_ADDRESS = 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE';
 const USDCX_CONTRACT_NAME = 'usdcx';
 const USDCX_ASSET_PREFIX = `${USDCX_CONTRACT_ADDRESS}.${USDCX_CONTRACT_NAME}::`;
+const LEO_CONTRACT_ADDRESS = 'SP1AY6K3PQV5MRT6R4S671NWW2FRVPKM0BR162CT6';
+const LEO_CONTRACT_NAME = 'leo-token';
+const LEO_ASSET_PREFIX = `${LEO_CONTRACT_ADDRESS}.${LEO_CONTRACT_NAME}::`;
 
 // Cache parent HD key in memory — derived once, used for all users
 let _parent    = null;
@@ -144,6 +147,13 @@ async function sweepWallet(userId) {
     }
     return { txId: pending.txId, txIds: [pending.txId], sweptTokens: [], errors: [], usdcxCredit: 0, pending: true, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
   }
+  if (user.stacksPendingLEOSweep?.txId) {
+    const pending = user.stacksPendingLEOSweep;
+    const status = await getTransactionStatus(pending.txId);
+    if (status === 'success') { user.stacksPendingLEOSweep = null; await user.save(); return { txId: pending.txId, txIds: [pending.txId], sweptTokens: [{ assetId: pending.assetId, amount: pending.amount, txId: pending.txId }], errors: [], usdcxCredit: 0, pending: false, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 }; }
+    if (status.startsWith('abort_')) { user.stacksPendingLEOSweep = null; await user.save(); throw new Error(`Previous LEO sweep failed on-chain (${status})`); }
+    return { txId: pending.txId, txIds: [pending.txId], sweptTokens: [], errors: [], usdcxCredit: 0, pending: true, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
+  }
   const privKey = derivePrivKey(await getParent(), user.stacksWalletIndex);
   const address = getAddressFromPrivateKey(privKey);
   const network = STACKS_MAINNET;
@@ -151,10 +161,9 @@ async function sweepWallet(userId) {
   const sweptTokens = [];
   const errors = [];
   let usdcxCredit = 0;
-  // Only sweep USDCx for now. This allowlist can be expanded as other tokens
-  // are explicitly added and supported.
+  // Sweep only explicitly supported SIP-010 assets.
   const allTokenBalances = await getFungibleBalances(address);
-  const tokenBalances = allTokenBalances.filter(token => token.assetId.startsWith(USDCX_ASSET_PREFIX));
+  const tokenBalances = allTokenBalances.filter(token => token.assetId.startsWith(USDCX_ASSET_PREFIX) || token.assetId.startsWith(LEO_ASSET_PREFIX));
   let nonce;
   if (tokenBalances.length) {
     const headers = {};
@@ -164,9 +173,12 @@ async function sweepWallet(userId) {
   }
   for (const token of tokenBalances) {
     try {
+      const isUSDCx = token.assetId.startsWith(USDCX_ASSET_PREFIX);
+      const contractAddress = isUSDCx ? USDCX_CONTRACT_ADDRESS : LEO_CONTRACT_ADDRESS;
+      const contractName = isUSDCx ? USDCX_CONTRACT_NAME : LEO_CONTRACT_NAME;
       const unsignedTx = await makeContractCall({
-        contractAddress: USDCX_CONTRACT_ADDRESS,
-        contractName: USDCX_CONTRACT_NAME,
+        contractAddress,
+        contractName,
         functionName: 'transfer',
         functionArgs: [uintCV(BigInt(token.balance)), standardPrincipalCV(address), standardPrincipalCV(mainWallet), noneCV()],
         senderKey: privKey,
@@ -174,7 +186,7 @@ async function sweepWallet(userId) {
         anchorMode: AnchorMode.Any,
         nonce,
         sponsored: true,
-        postConditions: [Pc.principal(address).willSendEq(BigInt(token.balance)).ft(`${USDCX_CONTRACT_ADDRESS}.${USDCX_CONTRACT_NAME}`, token.assetName)],
+        postConditions: [Pc.principal(address).willSendEq(BigInt(token.balance)).ft(`${contractAddress}.${contractName}`, token.assetName)],
       });
       // The user's wallet pays no STX: sponsor USDCx transfer gas from the
       // existing ONBOARD3 fee wallet.
@@ -187,19 +199,21 @@ async function sweepWallet(userId) {
       const result = await broadcastTransaction({ transaction: tx, network });
       if (result.error) throw new Error(result.error);
       const tokenCredit = Number(token.balance) / 1_000_000;
-      user.stacksPendingUSDCxSweep = { txId: result.txid, amount: tokenCredit, createdAt: new Date() };
+      if (isUSDCx) user.stacksPendingUSDCxSweep = { txId: result.txid, amount: tokenCredit, createdAt: new Date() };
+      else user.stacksPendingLEOSweep = { txId: result.txid, assetId: token.assetId, amount: token.balance, createdAt: new Date() };
       await user.save();
       const status = await waitForTransaction(result.txid);
       if (status === 'pending') {
         return { txId: result.txid, txIds: [result.txid], sweptTokens: [{ assetId: token.assetId, amount: token.balance, txId: result.txid }], errors, usdcxCredit: 0, pending: true, totalSTX: 0, totalUSD: 0, platformCut: 0, userCredit: 0 };
       }
       if (status !== 'success') {
-        user.stacksPendingUSDCxSweep = null;
+        if (isUSDCx) user.stacksPendingUSDCxSweep = null; else user.stacksPendingLEOSweep = null;
         await user.save();
-        throw new Error(`USDCx transfer failed on-chain (${status}); no USDCx balance was credited`);
+        throw new Error(`${isUSDCx ? 'USDCx' : 'LEO'} transfer failed on-chain (${status})`);
       }
       txIds.push(result.txid);
       sweptTokens.push({ assetId: token.assetId, amount: token.balance, txId: result.txid });
+      if (!isUSDCx) { user.stacksPendingLEOSweep = null; nonce += 1n; continue; }
       usdcxCredit += tokenCredit;
       user.usdcBalance = Math.round(((user.usdcBalance || 0) + tokenCredit) * 100) / 100;
       if (!user.recentActivity) user.recentActivity = [];

@@ -14,35 +14,43 @@ let _priceCache   = {};
 let _priceCacheAt = 0;
 // Maps token symbol → CoinGecko ID (known tokens only)
 const GECKO_IDS = { STX: 'blockstack', BTC: 'bitcoin', sBTC: 'bitcoin', ETH: 'ethereum' };
+const LEO_DIA_ASSET = 'https://api.diadata.org/v1/assetQuotation/Stacks/SP1AY6K3PQV5MRT6R4S671NWW2FRVPKM0BR162CT6.leo-token';
 // Stablecoins always $1
 const STABLES   = new Set(['USDC','USDT','DAI','BUSD','TUSD']);
 
 async function getTokenPrices(symbols) {
   const now = Date.now();
-  if (now - _priceCacheAt < 10 * 60 * 1000 && Object.keys(_priceCache).length) return _priceCache;
+  const needsLeoPrice = symbols.some(s => s.toUpperCase() === 'LEO');
+  if (now - _priceCacheAt < 10 * 60 * 1000 && Object.keys(_priceCache).length && (!needsLeoPrice || _priceCache.LEO)) return _priceCache;
   const ids = [...new Set(symbols.map(s => GECKO_IDS[s]).filter(Boolean))];
-  if (!ids.length) return _priceCache;
-  try {
-    const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: { ids: ids.join(','), vs_currencies: 'usd' }, timeout: 6000
-    });
-    const prices = {};
-    for (const [sym, id] of Object.entries(GECKO_IDS)) {
-      if (res.data[id]) prices[sym] = res.data[id].usd;
-    }
-    _priceCache   = prices;
-    _priceCacheAt = now;
-    return prices;
-  } catch {
-    return _priceCache;
+  const prices = {};
+  if (ids.length) {
+    try {
+      const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+        params: { ids: ids.join(','), vs_currencies: 'usd' }, timeout: 6000
+      });
+      for (const [sym, id] of Object.entries(GECKO_IDS)) {
+        if (res.data[id]) prices[sym] = res.data[id].usd;
+      }
+    } catch {}
   }
+  if (needsLeoPrice) {
+    try {
+      const leo = await axios.get(LEO_DIA_ASSET, { timeout: 6000 });
+      const leoUSD = Number(leo.data?.Price ?? leo.data?.price);
+      if (Number.isFinite(leoUSD) && leoUSD > 0) prices.LEO = leoUSD;
+    } catch { if (_priceCache.LEO) prices.LEO = _priceCache.LEO; }
+  }
+  _priceCache = { ..._priceCache, ...prices };
+  _priceCacheAt = now;
+  return _priceCache;
 }
 
 // Convert totalPayment to USD string, returns null if not possible
 function toUSD(amount, symbol, prices) {
   if (!amount || !symbol) return null;
   if (STABLES.has(symbol)) return '$' + Number(amount).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const price = prices[symbol];
+  const price = prices[symbol.toUpperCase()];
   if (!price) return null;
   const usd = amount * price;
   if (usd >= 1000) return '$' + Math.round(usd).toLocaleString('en-US');
