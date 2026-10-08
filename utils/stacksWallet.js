@@ -576,7 +576,7 @@ async function submitToZADWebAPI(privKey, bountyId, summary, submissionUrl, sign
       'Content-Type':            'text/plain;charset=UTF-8',
       'Accept':                  'text/x-component',
       'Cookie':                  cookieStr,
-      'Next-Action':             '3412751565eefa5c83032aedc403d0a6c1808442',
+      'Next-Action':             '0bd627de766e4d198a9751b22027e546295e1c5d',
       'Next-Router-State-Tree':  '%5B%22%22%2C%7B%7D%5D',
       'Origin':                  ZAD_BASE,
       'Referer':                 `${ZAD_BASE}/bounty/${bountyId}`,
